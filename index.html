@@ -76,13 +76,13 @@
     <div class="kpi-grid">
       <div class="kpi-card gray linkable" data-href="details_inflow.html" role="link" tabindex="0" aria-label="流入分析の詳細を見る"><div class="kpi-label">アクセスユーザー数</div><div class="donut-wrap"><canvas id="d_access"></canvas><div class="donut-center" id="c_access"></div></div><div class="kpi-rate" id="r_access">–</div><div class="kpi-foot">目標 <b id="t_access">–</b></div></div>
       <div class="kpi-card attr linkable" data-href="details_user.html" role="link" tabindex="0" aria-label="アカウント登録の詳細を見る"><div class="kpi-label">アカウント登録者数</div><div class="donut-wrap"><canvas id="d_signup"></canvas><div class="donut-center" id="c_signup"></div></div><div class="kpi-rate" id="r_signup">–</div><div class="kpi-foot">目標 <b id="t_signup">–</b></div></div>
-      <div class="kpi-card acq"><div class="kpi-label">スタンプ獲得者数</div><div class="donut-wrap"><canvas id="d_stamp"></canvas><div class="donut-center" id="c_stamp"></div></div><div class="kpi-rate" id="r_stamp">–</div><div class="kpi-foot">目標 <b id="t_stamp">–</b></div></div>
+      <div class="kpi-card rich linkable" data-href="details_drop_engagement.html" role="link" tabindex="0" aria-label="エンゲージメントの詳細を見る"><div class="kpi-label">いいね数</div><div class="donut-wrap"><canvas id="d_like"></canvas><div class="donut-center" id="c_like"></div></div><div class="kpi-rate" id="r_like">–</div><div class="kpi-foot">目標 <b id="t_like">–</b></div></div>
       <div class="kpi-card rich linkable" data-href="details_drop.html" role="link" tabindex="0" aria-label="投稿の詳細を見る"><div class="kpi-label">投稿者数</div><div class="donut-wrap"><canvas id="d_poster"></canvas><div class="donut-center" id="c_poster"></div></div><div class="kpi-rate" id="r_poster">–</div><div class="kpi-foot">目標 <b id="t_poster">–</b></div></div>
       <div class="kpi-card gray"><div class="kpi-label">アンケート回答者数</div><div class="donut-wrap"><canvas id="d_survey"></canvas><div class="donut-center" id="c_survey"></div></div><div class="kpi-rate" id="r_survey">–</div><div class="kpi-foot">目標 <b id="t_survey">–</b></div></div>
     </div>
     <div class="section-label" id="trend-section"><h2>Timeline <span class="note">日別の推移</span></h2><div class="meta" id="trendMeta">–</div></div>
-    <div class="panel" style="border-top:2px solid rgba(100,116,139,.55);"><div class="panel-head"><h3>時系列の折れ線グラフ</h3><span class="sub">アクセス（UU）・会員登録数・スタンプ取得者数・投稿者数</span></div><div class="chart-box trend"><canvas id="trendChart"></canvas></div></div>
-    <div class="footer-note">データソース: <code>mart_ga.json</code> / <code>mart_action_stamp.json</code> / <code>mart_action_drop.json</code> / <code>mart_user.json</code> ・ 本ページはフィルタなし（各データを常に全期間で集計）</div>
+    <div class="panel" style="border-top:2px solid rgba(100,116,139,.55);"><div class="panel-head"><h3>時系列の折れ線グラフ</h3><span class="sub">アクセス（UU）・会員登録数・いいね数・投稿者数</span></div><div class="chart-box trend"><canvas id="trendChart"></canvas></div></div>
+    <div class="footer-note">データソース: <code>mart_ga.json</code> / <code>mart_action_drop_engagement.json</code> / <code>mart_action_drop.json</code> / <code>mart_user.json</code> ・ 本ページはフィルタなし（各データを常に全期間で集計）</div>
   </main>
 </div>
 <script src="config.js"></script>
@@ -92,7 +92,7 @@
 const CONFIG = (typeof DASHBOARD_CONFIG !== "undefined") ? DASHBOARD_CONFIG : { targets:{}, colors:{} };
 const SRC = {
   ga:    ["json/mart_ga.json","mart_ga.json"],
-  stamp: ["json/mart_action_stamp.json","mart_action_stamp.json"],
+  like:  ["json/mart_action_drop_engagement.json","mart_action_drop_engagement.json"],
   drop:  ["json/mart_action_drop.json","mart_action_drop.json"],
   user:  ["json/mart_user.json","mart_user.json"]
 };
@@ -113,6 +113,12 @@ function donut(canvasId,centerId,rateId,key,value,hasData){
     new Chart(el(canvasId),{type:"doughnut",data:{datasets:[{data:[1],backgroundColor:[TRACK],borderWidth:0}]},options:{cutout:"72%",plugins:{legend:{display:false},tooltip:{enabled:false}}}});
     return;
   }
+  if(!(target>0)){
+    center.innerHTML='<span class="num">'+fmt(value)+'</span>';
+    rate.textContent="目標未設定"; rate.style.color="var(--dim)";
+    new Chart(el(canvasId),{type:"doughnut",data:{datasets:[{data:[1],backgroundColor:[TRACK],borderWidth:0}]},options:{cutout:"72%",plugins:{legend:{display:false},tooltip:{enabled:false}}}});
+    return;
+  }
   const pct = target>0 ? Math.min(value/target*100,100) : 0;
   const rawPct = target>0 ? Math.round(value/target*100) : 0;
   center.innerHTML='<span class="num">'+fmt(value)+'</span>';
@@ -121,15 +127,15 @@ function donut(canvasId,centerId,rateId,key,value,hasData){
 }
 
 (async()=>{
-  let ga,stamp,drop,user,updated="–";
+  let ga,eng,drop,user,updated="–";
   try{ ga=await loadOne(SRC.ga); }catch(e){ ga={records:[]}; }
-  try{ stamp=await loadOne(SRC.stamp); }catch(e){ stamp={records:[]}; }
+  try{ eng=await loadOne(SRC.like); }catch(e){ eng={records:[]}; }
   try{ drop=await loadOne(SRC.drop); }catch(e){ drop={records:[]}; }
   try{ user=await loadOne(SRC.user); }catch(e){ user={records:[]}; }
-  const gaR=ga.records||[], stR=stamp.records||[], drR=drop.records||[], usR=(user.records||[]).filter(r=>!r.del_flg);
+  const gaR=ga.records||[], enR=eng.records||[], drR=drop.records||[], usR=(user.records||[]).filter(r=>!r.del_flg);
   updated = [
     ...gaR.map(r=>r.event_date_time_jp),
-    ...stR.map(r=>r.action_occurred_at),
+    ...enR.map(r=>r.post_dated_at),
     ...drR.map(r=>r.post_dated_at),
     ...usR.map(r=>r.created_at)
   ].filter(Boolean).sort().pop() || "–";
@@ -137,7 +143,7 @@ function donut(canvasId,centerId,rateId,key,value,hasData){
 
   // --- 実数 ---
   const access = new Set(gaR.map(r=>r.user_pseudo_id).filter(Boolean)).size;   // 全アクセス数(UU)
-  const stampUsers = new Set(stR.map(r=>r.action_account_id).filter(Boolean)).size; // スタンプ獲得者数(ユニーク)
+  const likeTotal = enR.reduce((sum,r)=>sum+(Number(r.like_count)||0),0);          // いいね数(SUM(like_count))
   const poster = new Set(drR.map(r=>r.account_id).filter(Boolean)).size;        // 投稿者数(ユニーク)
   const signup = new Set(usR.map(r=>r.account_id).filter(Boolean)).size;       // アカウント登録者数(user mart, 有効会員)
   // survey はデータ未連携 → ブランク
@@ -145,40 +151,41 @@ function donut(canvasId,centerId,rateId,key,value,hasData){
   // 目標キャプション
   setText("t_access", fmt(CONFIG.targets.access||0));
   setText("t_signup", fmt(CONFIG.targets.signup||0));
-  setText("t_stamp",  fmt(CONFIG.targets.stamp||0));
+  setText("t_like",   CONFIG.targets.like>0 ? fmt(CONFIG.targets.like) : "–");
   setText("t_poster", fmt(CONFIG.targets.poster||0));
   setText("t_survey", fmt(CONFIG.targets.survey||0));
 
-  // --- ドーナツ（流入=灰 / 会員登録=青 / スタンプ=緑 / 投稿=紫 / アンケート=灰）---
+  // --- ドーナツ（流入=灰 / 会員登録=青 / いいね=紫 / 投稿=紫 / アンケート=灰）---
   donut("d_access","c_access","r_access","access",access,true);
   donut("d_signup","c_signup","r_signup","signup",signup,true);   // user mart（mart_user.json）の有効会員数を反映
-  donut("d_stamp","c_stamp","r_stamp","stamp",stampUsers,true);
+  donut("d_like","c_like","r_like","like",likeTotal,true);
   donut("d_poster","c_poster","r_poster","poster",poster,true);
   donut("d_survey","c_survey","r_survey","survey",0,false);    // ブランク
 
   // --- 時系列（日別）---
   const accByDate=new Map();
   gaR.forEach(r=>{ if(validDate(r.event_date_jp)){ if(!accByDate.has(r.event_date_jp))accByDate.set(r.event_date_jp,new Set()); if(r.user_pseudo_id)accByDate.get(r.event_date_jp).add(r.user_pseudo_id);} });
-  const stByDate=new Map();
-  stR.forEach(r=>{ const d=(r.event_date||"").slice(0,10); if(validDate(d)) stByDate.set(d,(stByDate.get(d)||0)+1); });
+  // いいね数（日別）— 投稿日(post_date)ごとに like_count を合算
+  const likeByDate=new Map();
+  enR.forEach(r=>{ const d=r.post_date || (r.post_dated_at||"").slice(0,10); if(validDate(d)) likeByDate.set(d,(likeByDate.get(d)||0)+(Number(r.like_count)||0)); });
   // 投稿者数（日別ユニーク投稿者）— drop データを account_id で個別カウント
   const posterByDate=new Map();
   drR.forEach(r=>{ const d=r.post_date || (r.post_dated_at||"").slice(0,10); if(validDate(d)){ if(!posterByDate.has(d))posterByDate.set(d,new Set()); if(r.account_id)posterByDate.get(d).add(r.account_id);} });
   // 会員登録数（日別ユニーク登録者）— user mart（有効会員）を created_date で個別カウント
   const signupByDate=new Map();
   usR.forEach(r=>{ const d=r.created_date || (r.created_at||"").slice(0,10); if(validDate(d)){ if(!signupByDate.has(d))signupByDate.set(d,new Set()); if(r.account_id)signupByDate.get(d).add(r.account_id);} });
-  const dates=[...new Set([...accByDate.keys(),...stByDate.keys(),...posterByDate.keys(),...signupByDate.keys()])].sort();
+  const dates=[...new Set([...accByDate.keys(),...likeByDate.keys(),...posterByDate.keys(),...signupByDate.keys()])].sort();
   const accVals=dates.map(d=>accByDate.has(d)?accByDate.get(d).size:0);
-  const stVals=dates.map(d=>stByDate.get(d)||0);
+  const likeVals=dates.map(d=>likeByDate.get(d)||0);
   const posterVals=dates.map(d=>posterByDate.has(d)?posterByDate.get(d).size:0);
   const signupVals=dates.map(d=>signupByDate.has(d)?signupByDate.get(d).size:0);
   setText("trendMeta", dates.length ? (dates[0]+" ～ "+dates[dates.length-1]) : "データなし");
   new Chart(el("trendChart"),{type:"line",data:{labels:dates,datasets:[
     {label:"アクセスユーザー数(UU)",data:accVals,borderColor:CONFIG.colors.access,backgroundColor:"rgba(100,116,139,.08)",fill:true,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y"},
     {label:"会員登録数",data:signupVals,borderColor:CONFIG.colors.signup,backgroundColor:"rgba(37,99,235,.06)",borderDash:[2,3],fill:false,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y1"},
-    {label:"スタンプ取得者数",data:stVals,borderColor:CONFIG.colors.stamp,backgroundColor:"rgba(47,143,102,.06)",fill:false,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y1"},
+    {label:"いいね数",data:likeVals,borderColor:CONFIG.colors.like||"#c2549a",backgroundColor:"rgba(194,84,154,.06)",fill:false,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y1"},
     {label:"投稿者数",data:posterVals,borderColor:CONFIG.colors.poster,backgroundColor:"rgba(122,88,176,.06)",borderDash:[5,4],fill:false,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y1"}
-  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{position:"top",labels:{boxWidth:12,font:{size:11}}}},scales:{y:{position:"left",beginAtZero:true,ticks:{precision:0},title:{display:true,text:"アクセス(UU)",font:{size:10}}},y1:{position:"right",beginAtZero:true,ticks:{precision:0},grid:{drawOnChartArea:false},title:{display:true,text:"会員登録 / スタンプ / 投稿者",font:{size:10}}},x:{grid:{display:false}}}}});
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{position:"top",labels:{boxWidth:12,font:{size:11}}}},scales:{y:{position:"left",beginAtZero:true,ticks:{precision:0},title:{display:true,text:"アクセス(UU)",font:{size:10}}},y1:{position:"right",beginAtZero:true,ticks:{precision:0},grid:{drawOnChartArea:false},title:{display:true,text:"会員登録 / いいね / 投稿者",font:{size:10}}},x:{grid:{display:false}}}}});
 })();
 
 // --- ドーナツKPIカードのクリックで各詳細ページへ遷移 ---
