@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>スタンプ獲得マップ — Dashboard</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- noUiSlider -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css" />
+
+  <!-- 共通デザインシステム（唯一の外部ファイル・編集禁止） -->
+  <link rel="stylesheet" href="dashboard-common.css" />
+
+  <!-- ===================== ページ固有スタイル（内包） =====================
+       スタンプ＝緑（--acq）テーマ。フィルタチップ・マーカー・ランキングを
+       すべて緑（主役）＋グレー（中立）に統一。
+  ====================================================================== -->
+  <style>
+    /* ---- フィルタバー ---- */
+    .filter-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; margin-bottom: var(--gap); }
+    .filter-bar .f-full { grid-column: 1 / -1; }
+    .filter-group .f-title { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); font-weight: 700; margin: 0 0 9px; display: flex; align-items: center; gap: 8px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip-btn { border: 1px solid var(--stroke); background: var(--bg); color: var(--muted); font-family: var(--font); font-size: 12.5px; padding: 7px 14px; border-radius: 0; cursor: pointer; transition: .15s; line-height: 1.3; white-space: nowrap; user-select: none; }
+    .chip-btn:hover { color: var(--text); background: #fff; }
+    /* スタンプ＝緑テーマ：選択チップは緑で統一 */
+    .chip-btn.on { background: var(--acq-soft); color: var(--acq); font-weight: 700; border-color: var(--acq); }
+
+    .filter-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
+    .filter-foot .f-count { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .filter-foot .f-count b { color: var(--acq); font-weight: 800; }
+    .reset-btn { border: 1px solid var(--stroke); background: #fff; color: var(--muted); font-family: var(--font); font-size: 12px; padding: 7px 16px; cursor: pointer; border-radius: 0; transition: .15s; }
+    .reset-btn:hover { color: var(--text); background: var(--bg); border-color: var(--acq); }
+
+    .time-readout { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; margin-bottom: 12px; }
+    .time-readout b { color: var(--acq); }
+
+    /* ---- 地図 ---- */
+    .map-box { height: 520px; width: 100%; position: relative; background: var(--bg-b); }
+    #map { height: 100%; width: 100%; }
+    .leaflet-container { font-family: var(--font); background: #e9ebef; }
+    .leaflet-popup-content-wrapper { border-radius: 0; box-shadow: 0 6px 24px rgba(16,24,40,.18); }
+    .leaflet-popup-content { margin: 0; width: 220px !important; }
+    .leaflet-popup-tip { box-shadow: none; }
+    .stamp-pop .sp-body { padding: 11px 13px 12px; }
+    .stamp-pop .sp-rank { font-size: 10.5px; font-weight: 800; color: var(--acq); letter-spacing: .4px; }
+    .stamp-pop .sp-name { font-size: 13px; font-weight: 700; color: var(--text); margin: 3px 0 8px; line-height: 1.4; }
+    .stamp-pop .sp-cnt { font-size: 22px; font-weight: 800; color: var(--acq); font-variant-numeric: tabular-nums; }
+    .stamp-pop .sp-cnt small { font-size: 11px; color: var(--muted); font-weight: 600; margin-left: 3px; }
+
+    /* 地図の円マーカー内テキスト */
+    .cmk { display:flex; align-items:center; justify-content:center; width:100%; height:100%;
+      color:#fff; font-weight:800; font-size:11px; font-family:var(--font); font-variant-numeric:tabular-nums; }
+
+    .map-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--muted); align-items:center; }
+    .map-legend .lg-item { display: inline-flex; align-items: center; gap: 7px; }
+    .map-legend .dotc { background: var(--acq); border-radius: 50%; display: inline-block; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(16,24,40,.4); }
+
+    /* ---- ランキング ---- */
+    .rank-list { display: flex; flex-direction: column; gap: 2px; }
+    .rank-row {
+      display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 14px;
+      padding: 11px 8px; border-bottom: 1px solid var(--stroke-soft); cursor: pointer; transition: .12s;
+    }
+    .rank-row:hover { background: var(--bg); }
+    .rank-row.hl { background: var(--acq-soft); }
+    .rank-no {
+      font-family: var(--font-display); font-weight: 900; font-size: 18px; text-align: center;
+      color: var(--dim); font-variant-numeric: tabular-nums;
+    }
+    .rank-row.top1 .rank-no, .rank-row.top2 .rank-no, .rank-row.top3 .rank-no { color: var(--acq); }
+    .rank-main { min-width: 0; }
+    .rank-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; line-height: 1.35;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rank-bar-track { height: 8px; background: var(--bg-b); width: 100%; }
+    .rank-bar { height: 100%; background: var(--acq); }
+    .rank-row.top1 .rank-bar { background: var(--acq); }
+    .rank-val { display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+    .rank-val b { font-size: 20px; font-weight: 800; color: var(--acq); font-variant-numeric: tabular-nums; }
+    .rank-val span { font-size: 11px; color: var(--muted); }
+
+    .more-wrap { text-align: center; margin-top: 20px; }
+    .more-btn { border: 1px solid var(--stroke); background: #fff; color: var(--muted); font-family: var(--font); font-size: 13px; padding: 10px 28px; cursor: pointer; border-radius: 0; transition: .15s; }
+    .more-btn:hover { color: var(--text); background: var(--bg); border-color: var(--acq); }
+
+    .list-head-meta { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 1080px) { .filter-bar { grid-template-columns: 1fr; } .map-box { height: 440px; } }
+    @media (max-width: 760px)  { .map-box { height: 360px; } }
+    @media (max-width: 430px)  { .map-box { height: 320px; } .rank-row { grid-template-columns: 32px 1fr auto; gap: 10px; } }
+    /* ---- サイドバー内フィルタ ---- */
+    .sidebar-filter { display:flex; flex-direction:column; gap:14px; }
+    .sidebar-filter .cap { font-size:10.5px; letter-spacing:1.4px; text-transform:uppercase; color:var(--dim); margin:0 2px 2px; }
+    .sidebar-filter .filter-bar { display:flex; flex-direction:column; gap:14px; margin:0; }
+    .sidebar-filter .filter-group .f-title { margin:0 0 7px; }
+    .sidebar-filter .chips { gap:6px; }
+    .sidebar-filter .chip-btn { font-size:11px; padding:5px 9px; }
+    .sidebar-filter .slider-wrap { min-width:0; padding:8px 4px 2px; }
+    .sidebar-filter .time-readout { font-size:11px; margin-bottom:6px; }
+    .sidebar-filter .filter-foot { flex-direction:column; align-items:stretch; gap:8px; margin-top:2px; }
+    .sidebar-filter .reset-btn { width:100%; }
+    .sidebar-filter .f-count { font-size:11.5px; }
+    /* noUiSlider をテーマ色（緑）に */
+    .sidebar-filter .noUi-connect { background: linear-gradient(90deg, #7bbf9f, var(--acq)); }
+    .sidebar-filter .noUi-horizontal .noUi-handle { border-color: var(--acq); }
+
+    /* ---- シックな文字ベース ナビ（SVGアイコン付き・緑アクセント） ---- */
+    .sidebar { --accent: var(--gray); }
+    .switch-group { gap: 1px; }
+    .switch-group .cap { margin: 10px 8px 10px; }
+    a.switch-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 10px 9px 12px;
+      border: none; background: transparent; border-radius: 0;
+      border-left: 2px solid transparent;
+      color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .2px;
+      transition: color .15s, border-color .15s;
+    }
+    a.switch-item:hover { background: transparent; color: var(--text); border-left-color: var(--stroke); }
+    a.switch-item.active { background: transparent; color: var(--text); font-weight: 700; border-left-color: var(--accent); }
+    a.switch-item .mi { width: 17px; height: 17px; flex: none; color: var(--dim); display: inline-flex; align-items: center; justify-content: center; transition: color .15s; }
+    a.switch-item:hover .mi { color: var(--muted); }
+    a.switch-item.active .mi { color: var(--accent); }
+    .switch-item .mi svg { width: 100%; height: 100%; display: block; }
+    /* ---- スタンプ詳細モーダル（画面中央に固定表示・スクロール無し） ---- */
+    .spot-modal {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+      background: rgba(15, 23, 42, .55);
+      opacity: 0; visibility: hidden; transition: opacity .15s ease;
+    }
+    .spot-modal.show { opacity: 1; visibility: visible; }
+    .spot-modal-inner {
+      background: #fff; width: 100%; max-width: 380px; position: relative;
+      padding: 30px 26px 26px; box-shadow: 0 20px 60px rgba(16,24,40,.35);
+      border-top: 3px solid var(--acq);
+    }
+    .spot-modal-close {
+      position: absolute; top: 8px; right: 10px; width: 32px; height: 32px;
+      border: none; background: transparent; font-size: 22px; line-height: 1;
+      color: var(--muted); cursor: pointer;
+    }
+    .spot-modal-close:hover { color: var(--text); }
+    .spot-modal-rank { font-size: 12px; font-weight: 800; color: var(--acq); letter-spacing: .5px; margin-bottom: 8px; }
+    .spot-modal-name { font-size: 18px; font-weight: 700; color: var(--text); line-height: 1.45; margin-bottom: 16px; }
+    .spot-modal-count { font-size: 36px; font-weight: 800; color: var(--acq); font-variant-numeric: tabular-nums; }
+    .spot-modal-count small { font-size: 13px; color: var(--muted); font-weight: 600; margin-left: 6px; }
+    body.modal-open { overflow: hidden; }
+  </style>
+</head>
+<body class="page-fade">
+  <div class="app">
+    <!-- ============ Sidebar ============ -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div style="font-family:var(--font-display);font-weight:900;font-size:22px;letter-spacing:-.5px;line-height:1.1;">
+          DROP<span style="color:var(--gray);">.</span><br>
+          <span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;">TRACKER</span>
+        </div>
+      </div>
+
+      <nav class="nav-group switch-group">
+      <div class="cap">Dashboards</div>
+      <a class="switch-item" href="index.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v6M10 8v11M15 4v15M20 11v8"/></svg></span>Summary</a>
+      <a class="switch-item" href="details_inflow.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>流入分析</a>
+      <a class="switch-item" href="details_user.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/></svg></span>アカウント登録</a>
+      <a class="switch-item active" href="details_stamp.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M9.7 9.2l1.7 1.7 3-3.4"/><path d="M8.3 14.2L7 21l5-2.2 5 2.2-1.3-6.8"/></svg></span>スタンプ</a>
+      <a class="switch-item" href="details_drop.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5L3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5l-6-2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></span>投稿</a>
+    </nav>
+
+      <div class="nav-group sidebar-filter">
+        <div class="panel-head">
+          <h3>🔎 フィルタ</h3>
+          <span class="sub">性別・年齢・獲得日で絞り込み</span>
+        </div>
+
+        <div class="filter-bar">
+          <div class="filter-group">
+            <div class="f-title">性別</div>
+            <div class="chips" id="genderChips"></div>
+          </div>
+
+          <div class="filter-group">
+            <div class="f-title">年齢層</div>
+            <div class="chips" id="ageChips"></div>
+          </div>
+
+          <div class="filter-group f-full">
+            <div class="f-title">獲得日</div>
+            <div class="time-readout" id="timeReadout">–</div>
+            <div class="slider-wrap" style="padding-left:0;padding-right:6px;">
+              <div id="timeSlider"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-foot">
+          <div class="f-count" id="filterCount">–</div>
+          <button class="reset-btn" id="resetBtn">条件をリセット</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h1>Stamp Map</h1>
+        </div>
+        <div class="status"><span class="pulse"></span> latest timestamp: <b>&nbsp;<span id="metaUpdated2">–</span></b></div>
+      </div>
+
+      <!-- モバイル用ダッシュボード切替 -->
+      <div class="switch-mobile"><a class="chip" href="index.html">Summary</a><a class="chip" href="details_inflow.html">流入分析</a><a class="chip" href="details_user.html">アカウント登録</a><a class="chip chip-active" href="details_stamp.html">スタンプ</a><a class="chip" href="details_drop.html">投稿</a></div>
+
+      <!-- KPI（緑＝主要指標 / グレー＝中立） -->
+      <div class="kpis">
+        <div class="kpi acq"><div class="k-label">総スタンプ数</div><div class="k-val" id="kTotal">–</div><div class="k-cap">全獲得ログ</div></div>
+        <div class="kpi gray"><div class="k-label">表示中</div><div class="k-val" id="kShown">–</div><div class="k-cap">フィルタ適用後</div></div>
+        <div class="kpi acq"><div class="k-label">獲得スポット数</div><div class="k-val" id="kSpots">–</div><div class="k-cap">ユニーク会場</div></div>
+        <div class="kpi gray"><div class="k-label">参加者数</div><div class="k-val" id="kUsers">–</div><div class="k-cap">ユニークアカウント</div></div>
+      </div>
+<!-- ============ 上段：地図 ============ -->
+      <div class="section-label" id="map-section">
+        <h2>Stamp Map <span class="note">マーカーの数字＝獲得数</span></h2>
+        <div class="meta">円をタップすると会場と獲得数を表示</div>
+      </div>
+      <div class="panel map-panel dom-acq" style="border-top:2px solid rgba(47,143,102,.55);">
+        <div class="map-box"><div id="map"></div></div>
+        <div class="map-legend">
+          <span class="lg-item"><i class="dotc" style="width:10px;height:10px;"></i> 少</span>
+          <span class="lg-item"><i class="dotc" style="width:18px;height:18px;"></i> 多</span>
+          <span style="color:var(--dim);">円の大きさ・数字は会場ごとのスタンプ獲得数を表します</span>
+        </div>
+      </div>
+
+      <!-- ============ 下段：ランキング ============ -->
+      <div class="section-label" id="rank-section">
+        <h2>Stamp Ranking</h2>
+        <div class="meta list-head-meta" id="listMeta">–</div>
+      </div>
+      <div class="panel dom-acq" style="border-top:2px solid rgba(47,143,102,.55);">
+        <div class="rank-list" id="rankList">
+          <div class="empty-state"><b>読み込み中…</b>json/mart_action_stamp.json を取得しています</div>
+        </div>
+        <div class="more-wrap" id="moreWrap"></div>
+      </div>
+
+      <div class="footer-note">
+        データソース: <code>json/mart_action_stamp.json</code> ・ イベント <code>ikefes-2025</code> ・
+        本ダッシュボードは社内デザインシステム（dashboard-common.css）に準拠しています。
+      </div>
+    </main>
+  </div>
+
+  <!-- ============ スタンプ詳細モーダル ============ -->
+  <div id="spotModal" class="spot-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modalSpotName">
+    <div class="spot-modal-inner" role="document">
+      <button id="spotModalClose" class="spot-modal-close" type="button" aria-label="詳細を閉じる">&times;</button>
+      <div class="spot-modal-body">
+        <div id="modalSpotRank" class="spot-modal-rank"></div>
+        <div id="modalSpotName" class="spot-modal-name"></div>
+        <div id="modalSpotCount" class="spot-modal-count"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <!-- 共通設定（CARTO APIキー等を一元管理）。地図設定は config.js の map で差し替え -->
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+
+  <!-- ===================== ページ固有ロジック（内包） ===================== -->
+  <script>
+  /* --- カラー割当 ---
+   *   スタンプ＝緑（--acq）で統一（地図/ランキング/フィルタ/KPI主要指標）
+   *   中立・補助指標は グレー（--gray）
+   *   ※ 性別・年齢は「フィルタの絞り込み軸」。色分けはせずラベルで区別する。
+   */
+  /* CARTO 地図設定は config.js（DASHBOARD_CONFIG.map）で一元管理。
+     未読込時に備えたフォールバックを用意（APIキー等の差し替えは config.js のみでOK）。 */
+  const MAP_CFG = (typeof DASHBOARD_CONFIG !== "undefined" && DASHBOARD_CONFIG.map) ? DASHBOARD_CONFIG.map : {
+    cartoApiKey: "",
+    tile: "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  };
+  const CONFIG = {
+    dataSource: "json/mart_action_stamp.json",
+    map: {
+      center: [34.6905, 135.5023], zoom: 13, minZoom: 10, maxZoom: 18,
+      // CARTO ベースマップ設定は config.js から取得（APIキーの差し替えは config.js のみ）
+      cartoApiKey: MAP_CFG.cartoApiKey,
+      tile: MAP_CFG.tile,
+      attribution: MAP_CFG.attribution
+    },
+    genderLabel: (g) => (g && g.trim() !== "" ? g : "無回答"),
+    ageOrder: ["20代", "30代", "40代", "50代"],
+    ageLabel: (a) => (a && a.trim() !== "" ? a : "未設定"),
+    genderOrder: ["男性", "女性", "無回答"],
+    pageSize: 20
+  };
+
+  const el = (id) => document.getElementById(id);
+  const setText = (id, v) => { const e = el(id); if (e) e.textContent = v; };
+  const esc = (t) => (t == null ? "" : String(t)).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const state = { genders: new Set(), ages: new Set(), dmin: null, dmax: null, limit: CONFIG.pageSize };
+  let ROWS = [], DATES = [], map, markerLayer, markerBySpot = {}, sliderBuilt = false, LAST_RANKING = [];
+
+  // ---- スタンプ詳細モーダル（画面中央固定・スクロールなし） ----
+  function openSpotModal(r, rank) {
+    setText("modalSpotRank", `第 ${rank} 位`);
+    setText("modalSpotName", r.spot);
+    el("modalSpotCount").innerHTML = `${r.count}<small>スタンプ</small>`;
+    const modal = el("spotModal");
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    el("spotModalClose").focus();
+  }
+  function closeSpotModal() {
+    const modal = el("spotModal");
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
+  }
+  el("spotModalClose").addEventListener("click", closeSpotModal);
+  el("spotModal").addEventListener("click", (event) => {
+    if (event.target === el("spotModal")) closeSpotModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && el("spotModal").classList.contains("show")) closeSpotModal();
+  });
+
+  function normalize(records) {
+    return records.map(r => ({
+      id: r.action_id, spot: r.event_name || "(不明な会場)", eid: r.event_id,
+      lat: r.spot_latitude, lng: r.spot_longitude,
+      g: r.gender || "", a: r.action_account_age_group || "",
+      acc: r.action_account_id,
+      // event_date は "YYYY-MM-DD hh:mm:ss.ffffff" 形式 → 日付部のみ使用
+      date: (r.event_date || "").slice(0, 10)
+    }));
+  }
+
+  function pass(p) {
+    if (state.genders.size && !state.genders.has(p.g)) return false;
+    if (state.ages.size && !state.ages.has(p.a)) return false;
+    if (p.date) {
+      const di = DATES.indexOf(p.date);
+      if (di < 0 || di < state.dmin || di > state.dmax) return false;
+    }
+    return true;
+  }
+
+  // 会場ごとに集計しランキング配列を返す
+  function aggregate(filtered) {
+    const m = {};
+    filtered.forEach(p => {
+      if (!m[p.spot]) m[p.spot] = { spot: p.spot, count: 0, lat: p.lat, lng: p.lng };
+      m[p.spot].count++;
+      if (m[p.spot].lat == null && p.lat != null) { m[p.spot].lat = p.lat; m[p.spot].lng = p.lng; }
+    });
+    return Object.values(m).sort((a, b) => b.count - a.count || a.spot.localeCompare(b.spot, "ja"));
+  }
+
+  function render() {
+    const filtered = ROWS.filter(pass);
+    const ranking = aggregate(filtered);
+    LAST_RANKING = ranking;
+
+    // 地図
+    markerLayer.clearLayers();
+    markerBySpot = {};
+    const maxCount = ranking.length ? ranking[0].count : 1;
+    ranking.forEach((r, idx) => {
+      if (r.lat == null || r.lng == null) return;
+      const radius = 9 + Math.round((r.count / maxCount) * 15); // 9〜24px
+      const icon = L.divIcon({
+        className: "",
+        html: `<div style="width:${radius*2}px;height:${radius*2}px;border-radius:50%;background:var(--acq);border:2px solid #fff;box-shadow:0 1px 4px rgba(16,24,40,.4);"><div class="cmk">${r.count}</div></div>`,
+        iconSize: [radius*2, radius*2], iconAnchor: [radius, radius], popupAnchor: [0, -radius]
+      });
+      const mk = L.marker([r.lat, r.lng], { icon });
+      mk.on("click", () => { highlightRow(r.spot); openSpotModal(r, idx + 1); });
+      mk.addTo(markerLayer);
+      markerBySpot[r.spot] = mk;
+    });
+
+    // KPI
+    setText("kTotal", ROWS.length);
+    setText("kShown", filtered.length);
+    setText("kSpots", ranking.length);
+    setText("kUsers", new Set(filtered.map(p => p.acc)).size);
+    el("filterCount").innerHTML = `絞り込み結果 <b>${filtered.length}</b> 件 / 全 ${ROWS.length} 件`;
+
+    renderRanking(ranking);
+  }
+
+  function renderRanking(ranking) {
+    const shown = ranking.slice(0, state.limit);
+    setText("listMeta", `${ranking.length} 会場中 上位 ${shown.length} 会場を表示`);
+
+    if (!ranking.length) {
+      el("rankList").innerHTML = `<div class="empty-state"><b>該当するスタンプがありません</b>フィルタ条件を変更してください</div>`;
+      el("moreWrap").innerHTML = "";
+      return;
+    }
+
+    const maxCount = ranking[0].count;
+    el("rankList").innerHTML = shown.map((r, i) => {
+      const rank = i + 1;
+      const topCls = rank <= 3 ? " top" + rank : "";
+      const w = Math.max(4, Math.round((r.count / maxCount) * 100));
+      return `<div class="rank-row${topCls}" data-spot="${esc(r.spot)}">
+        <div class="rank-no">${rank}</div>
+        <div class="rank-main">
+          <div class="rank-name" title="${esc(r.spot)}">${esc(r.spot)}</div>
+          <div class="rank-bar-track"><div class="rank-bar" style="width:${w}%"></div></div>
+        </div>
+        <div class="rank-val"><b>${r.count}</b><span>件</span></div>
+      </div>`;
+    }).join("");
+
+    el("rankList").querySelectorAll(".rank-row").forEach(row => {
+      row.addEventListener("click", () => {
+        const spot = row.getAttribute("data-spot");
+        const mk = markerBySpot[spot];
+        if (mk) {
+          const ll = mk.getLatLng();
+          map.flyTo([ll.lat, ll.lng], 16, { duration: .6 });
+        }
+        highlightRow(spot);
+        const idx = LAST_RANKING.findIndex(x => x.spot === spot);
+        if (idx >= 0) openSpotModal(LAST_RANKING[idx], idx + 1);
+      });
+    });
+
+    el("moreWrap").innerHTML = (shown.length < ranking.length)
+      ? `<button class="more-btn" id="moreBtn">さらに表示（残り ${ranking.length - shown.length} 会場）</button>`
+      : "";
+    const mb = el("moreBtn");
+    if (mb) mb.addEventListener("click", () => { state.limit += CONFIG.pageSize; renderRanking(ranking); });
+  }
+
+  function highlightRow(spot) {
+    const list = el("rankList");
+    list.querySelectorAll(".rank-row.hl").forEach(r => r.classList.remove("hl"));
+    const row = list.querySelector(`.rank-row[data-spot="${(spot || "").replace(/"/g, '\\"')}"]`);
+    if (row) { row.classList.add("hl"); }
+  }
+
+  function buildChips() {
+    // 性別・年齢とも「緑テーマ」で統一（選択で .on → 緑）
+    // デフォルトは全選択（存在する値をすべて state に追加し .on 表示）
+    el("genderChips").innerHTML = CONFIG.genderOrder.map(g => {
+      const n = ROWS.filter(p => p.g === g).length;
+      if (!n) return "";
+      state.genders.add(g);
+      return `<button class="chip-btn on" data-type="g" data-val="${esc(g)}">${esc(CONFIG.genderLabel(g))} <span style="opacity:.6">${n}</span></button>`;
+    }).join("");
+
+    el("ageChips").innerHTML = CONFIG.ageOrder.map(a => {
+      const n = ROWS.filter(p => p.a === a).length;
+      if (!n) return "";
+      state.ages.add(a);
+      return `<button class="chip-btn on" data-type="a" data-val="${esc(a)}">${esc(CONFIG.ageLabel(a))} <span style="opacity:.6">${n}</span></button>`;
+    }).join("");
+
+    document.querySelectorAll(".chip-btn[data-type]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const set = btn.getAttribute("data-type") === "g" ? state.genders : state.ages;
+        const val = btn.getAttribute("data-val");
+        if (set.has(val)) { set.delete(val); btn.classList.remove("on"); }
+        else { set.add(val); btn.classList.add("on"); }
+        state.limit = CONFIG.pageSize;
+        render();
+      });
+    });
+  }
+
+  function buildSlider() {
+    const slider = el("timeSlider"), readout = el("timeReadout");
+    const maxIdx = Math.max(DATES.length - 1, 0);
+    noUiSlider.create(slider, {
+      start: [0, maxIdx], connect: true, step: 1, range: { min: 0, max: maxIdx || 1 },
+      format: { to: v => Math.round(v), from: v => Math.round(v) }
+    });
+    slider.noUiSlider.on("update", (vals) => {
+      state.dmin = +vals[0]; state.dmax = +vals[1];
+      readout.innerHTML = `獲得日 <b>${esc(DATES[state.dmin] || "–")}</b> 〜 <b>${esc(DATES[state.dmax] || "–")}</b>`;
+    });
+    slider.noUiSlider.on("change", () => { state.limit = CONFIG.pageSize; render(); });
+    sliderBuilt = true;
+  }
+
+  el("resetBtn").addEventListener("click", () => {
+    // リセット＝全選択に戻す
+    state.genders.clear(); state.ages.clear();
+    document.querySelectorAll(".chip-btn[data-type]").forEach(b => {
+      b.classList.add("on");
+      const set = b.getAttribute("data-type") === "g" ? state.genders : state.ages;
+      set.add(b.getAttribute("data-val"));
+    });
+    state.dmin = 0; state.dmax = Math.max(DATES.length - 1, 0); state.limit = CONFIG.pageSize;
+    if (sliderBuilt) el("timeSlider").noUiSlider.set([0, Math.max(DATES.length - 1, 0)]);
+    render();
+  });
+
+  // 地図初期化
+  map = L.map("map", { center: CONFIG.map.center, zoom: CONFIG.map.zoom, minZoom: CONFIG.map.minZoom, maxZoom: CONFIG.map.maxZoom, scrollWheelZoom: true });
+  // API キーがあればタイルURLに key クエリを付与
+  const tileUrl = CONFIG.map.cartoApiKey
+    ? CONFIG.map.tile + (CONFIG.map.tile.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(CONFIG.map.cartoApiKey)
+    : CONFIG.map.tile;
+  L.tileLayer(tileUrl, { attribution: CONFIG.map.attribution, maxZoom: CONFIG.map.maxZoom }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+
+  // JSON を直接参照して起動
+  fetch(CONFIG.dataSource)
+    .then(res => { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+    .then(json => {
+      ROWS = normalize(json.records || []);
+      DATES = Array.from(new Set(ROWS.map(p => p.date).filter(Boolean))).sort();
+      state.dmin = 0; state.dmax = Math.max(DATES.length - 1, 0);
+
+      const latest = (json.records || []).map(r => r.action_occurred_at).filter(Boolean).sort().pop();
+      setText("metaUpdated2", latest || "–");
+
+      buildChips();
+      buildSlider();
+      render();
+      setTimeout(() => {
+        map.invalidateSize();
+        // データの緯度経度から自動的に地図の中心・ズームを合わせる
+        const pts = ROWS.filter(p => p.lat != null && p.lng != null).map(p => [p.lat, p.lng]);
+        if (pts.length) {
+          map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] });
+        }
+      }, 200);
+    })
+    .catch(err => {
+      el("rankList").innerHTML = `<div class="empty-state"><b>データを読み込めませんでした</b>${esc(String(err.message))}<br>ローカルで開く場合は簡易サーバー経由で表示してください（file:// では fetch できません）</div>`;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>

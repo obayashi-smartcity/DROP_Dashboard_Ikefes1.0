@@ -1,0 +1,36 @@
+{
+  "mart": "mart_action_stamp_limit",
+  "record_count": 2,
+  "records": [
+    {
+      "action_id": "ca28c60d-daa0-46e5-8fc1-f7cdff1ddb0a",
+      "collab_event_name": "ikefes-2026",
+      "action_occurred_at": "2026-10-19 11:28:55",
+      "event_date": "2026-10-19",
+      "action_account_id": "17948a08-b071-70c1-5250-7e9e59614247",
+      "event_id": "EV01010004",
+      "event_name": "大阪ステーションシティ",
+      "spot_latitude": 34.7026395,
+      "spot_longitude": 135.4960285,
+      "gender": "無回答",
+      "action_account_age_group": "30代",
+      "action_account_age_group_half": "35～39歳",
+      "is_operation_member": false
+    },
+    {
+      "action_id": "98e4a4d0-b343-4572-bdce-e727359c6dd4",
+      "collab_event_name": "ikefes-2026",
+      "action_occurred_at": "2026-10-19 11:26:09",
+      "event_date": "2026-10-19",
+      "action_account_id": "17948a08-b071-70c1-5250-7e9e59614247",
+      "event_id": "EV01010003",
+      "event_name": "梅田スカイビル（新梅田シティ）",
+      "spot_latitude": 34.7052872,
+      "spot_longitude": 135.4896527,
+      "gender": "無回答",
+      "action_account_age_group": "30代",
+      "action_account_age_group_half": "35～39歳",
+      "is_operation_member": false
+    }
+  ]
+}

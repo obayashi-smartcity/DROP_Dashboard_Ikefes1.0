@@ -1,1 +1,190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TOP — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard-common.css" />
+  <style>
+    .kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:var(--gap); margin-bottom:6px; }
+    /* ドーナツKPIは白背景タイル */
+    .kpi-card { background:var(--panel); border:none; padding:20px 16px 18px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:12px; }
+    .kpi-card.linkable { cursor:pointer; transition:transform .15s, box-shadow .15s; }
+    .kpi-card.linkable:hover { transform:translateY(-3px); box-shadow:0 8px 20px rgba(16,24,40,.10); }
+    .kpi-card.linkable:focus-visible { outline:2px solid var(--gray); outline-offset:2px; }
+    .kpi-card.acq  { border-top:3px solid var(--acq); }
+    .kpi-card.attr { border-top:3px solid var(--attr); }
+    .kpi-card.rich { border-top:3px solid var(--rich); }
+    .kpi-card.gray { border-top:3px solid var(--gray); }
+    .kpi-label { font-size:12px; font-weight:700; letter-spacing:.3px; color:var(--muted); }
+    .donut-wrap { position:relative; width:130px; height:130px; }
+    .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; }
+    .donut-center .num { font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; letter-spacing:-.5px; }
+    .donut-center .blank { font-size:13px; color:var(--dim); font-weight:600; }
+    .kpi-card.acq  .donut-center .num { color:var(--acq); }
+    .kpi-card.attr .donut-center .num { color:var(--attr); }
+    .kpi-card.rich .donut-center .num { color:var(--rich); }
+    .kpi-card.gray .donut-center .num { color:var(--gray); }
+    .kpi-foot { font-size:11px; color:var(--dim); line-height:1.5; }
+    .kpi-foot b { color:var(--text); font-variant-numeric:tabular-nums; }
+    .kpi-rate { font-size:12px; font-weight:700; margin-top:2px; }
+    .chart-box.trend { height:340px; }
+    @media (max-width:1180px){ .kpi-grid{grid-template-columns:repeat(3,1fr);} }
+    @media (max-width:760px){ .kpi-grid{grid-template-columns:repeat(2,1fr);} .chart-box.trend{height:280px;} .donut-wrap{width:110px;height:110px;} }
+    @media (max-width:430px){ .kpi-grid{grid-template-columns:1fr 1fr;} }
 
+    /* ===== シックな文字ベース ナビ（SVGアイコン付き） ===== */
+    .sidebar { --accent: var(--gray); }
+    .switch-group { gap: 1px; }
+    .switch-group .cap { margin: 10px 8px 10px; }
+    a.switch-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 10px 9px 12px;
+      border: none; background: transparent; border-radius: 0;
+      border-left: 2px solid transparent;
+      color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .2px;
+      transition: color .15s, border-color .15s;
+    }
+    a.switch-item:hover { background: transparent; color: var(--text); border-left-color: var(--stroke); }
+    a.switch-item.active { background: transparent; color: var(--text); font-weight: 700; border-left-color: var(--accent); }
+    a.switch-item .mi { width: 17px; height: 17px; flex: none; color: var(--dim); display: inline-flex; align-items: center; justify-content: center; transition: color .15s; }
+    a.switch-item:hover .mi { color: var(--muted); }
+    a.switch-item.active .mi { color: var(--accent); }
+    .switch-item .mi svg { width: 100%; height: 100%; display: block; }
+  </style>
+</head>
+<body class="page-fade">
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div style="font-family:var(--font-display);font-weight:900;font-size:22px;letter-spacing:-.5px;line-height:1.1;">DROP<span style="color:var(--gray);">.</span><br><span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;">TRACKER</span></div></div>
+    <nav class="nav-group switch-group">
+      <div class="cap">Dashboards</div>
+      <a class="switch-item active" href="index.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v6M10 8v11M15 4v15M20 11v8"/></svg></span>Summary</a>
+      <a class="switch-item" href="details_inflow.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>流入分析</a>
+      <a class="switch-item" href="details_user.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/></svg></span>アカウント登録</a>
+      <a class="switch-item" href="details_stamp.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M9.7 9.2l1.7 1.7 3-3.4"/><path d="M8.3 14.2L7 21l5-2.2 5 2.2-1.3-6.8"/></svg></span>スタンプ</a>
+      <a class="switch-item" href="details_drop.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5L3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5l-6-2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></span>投稿</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="topbar"><div><h1>Summary</h1></div><div class="status"><span class="pulse"></span> latest timestamp: <b>&nbsp;<span id="metaUpdated2">–</span></b></div></div>
+    <div class="switch-mobile"><a class="chip chip-active" href="index.html">Summary</a><a class="chip" href="details_inflow.html">流入分析</a><a class="chip" href="details_user.html">アカウント登録</a><a class="chip" href="details_stamp.html">スタンプ</a><a class="chip" href="details_drop.html">投稿</a></div>
+    <div class="section-label" id="kpi-section"><h2>KPI<span class="note">円内＝実数 / ドーナツ＝目標達成度</span></h2><div class="meta">目標値は config.js で設定</div></div>
+    <div class="kpi-grid">
+      <div class="kpi-card gray linkable" data-href="details_inflow.html" role="link" tabindex="0" aria-label="流入分析の詳細を見る"><div class="kpi-label">アクセスユーザー数</div><div class="donut-wrap"><canvas id="d_access"></canvas><div class="donut-center" id="c_access"></div></div><div class="kpi-rate" id="r_access">–</div><div class="kpi-foot">目標 <b id="t_access">–</b></div></div>
+      <div class="kpi-card attr linkable" data-href="details_user.html" role="link" tabindex="0" aria-label="アカウント登録の詳細を見る"><div class="kpi-label">アカウント登録者数</div><div class="donut-wrap"><canvas id="d_signup"></canvas><div class="donut-center" id="c_signup"></div></div><div class="kpi-rate" id="r_signup">–</div><div class="kpi-foot">目標 <b id="t_signup">–</b></div></div>
+      <div class="kpi-card acq linkable" data-href="details_stamp.html" role="link" tabindex="0" aria-label="スタンプの詳細を見る"><div class="kpi-label">スタンプ獲得者数</div><div class="donut-wrap"><canvas id="d_stamp"></canvas><div class="donut-center" id="c_stamp"></div></div><div class="kpi-rate" id="r_stamp">–</div><div class="kpi-foot">目標 <b id="t_stamp">–</b></div></div>
+      <div class="kpi-card rich linkable" data-href="details_drop.html" role="link" tabindex="0" aria-label="投稿の詳細を見る"><div class="kpi-label">投稿者数</div><div class="donut-wrap"><canvas id="d_poster"></canvas><div class="donut-center" id="c_poster"></div></div><div class="kpi-rate" id="r_poster">–</div><div class="kpi-foot">目標 <b id="t_poster">–</b></div></div>
+      <div class="kpi-card gray"><div class="kpi-label">アンケート回答者数</div><div class="donut-wrap"><canvas id="d_survey"></canvas><div class="donut-center" id="c_survey"></div></div><div class="kpi-rate" id="r_survey">–</div><div class="kpi-foot">目標 <b id="t_survey">–</b></div></div>
+    </div>
+    <div class="section-label" id="trend-section"><h2>Timeline <span class="note">日別の推移</span></h2><div class="meta" id="trendMeta">–</div></div>
+    <div class="panel" style="border-top:2px solid rgba(100,116,139,.55);"><div class="panel-head"><h3>時系列の折れ線グラフ</h3><span class="sub">アクセス（UU）・会員登録数・スタンプ取得者数・投稿者数</span></div><div class="chart-box trend"><canvas id="trendChart"></canvas></div></div>
+    <div class="footer-note">データソース: <code>mart_ga.json</code> / <code>mart_action_stamp.json</code> / <code>mart_action_drop.json</code> / <code>mart_user.json</code> ・ 本ページはフィルタなし（各データを常に全期間で集計）</div>
+  </main>
+</div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+/* 目標値・カラーは config.js（DASHBOARD_CONFIG）で管理 */
+const CONFIG = (typeof DASHBOARD_CONFIG !== "undefined") ? DASHBOARD_CONFIG : { targets:{}, colors:{} };
+const SRC = {
+  ga:    ["json/mart_ga.json","mart_ga.json"],
+  stamp: ["json/mart_action_stamp.json","mart_action_stamp.json"],
+  drop:  ["json/mart_action_drop.json","mart_action_drop.json"],
+  user:  ["json/mart_user.json","mart_user.json"]
+};
+const el=id=>document.getElementById(id);
+const setText=(id,v)=>{const e=el(id); if(e) e.textContent=v;};
+const fmt=n=>Number(n).toLocaleString("ja-JP");
+const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(s||"");
+/* ドーナツの未達リング(トラック)。白タイル上で自然に見える淡いグレー */
+const TRACK="#e2e6ea";
+async function loadOne(list){let last;for(const s of list){try{const r=await fetch(s);if(!r.ok)throw new Error(r.status);return await r.json()}catch(e){last=e}}throw last}
+
+function donut(canvasId,centerId,rateId,key,value,hasData){
+  const target=CONFIG.targets[key]||0, color=CONFIG.colors[key]||"var(--gray)";
+  const center=el(centerId), rate=el(rateId);
+  if(!hasData){
+    center.innerHTML='<span class="blank">–</span>';
+    rate.textContent="データ未連携"; rate.style.color="var(--dim)";
+    new Chart(el(canvasId),{type:"doughnut",data:{datasets:[{data:[1],backgroundColor:[TRACK],borderWidth:0}]},options:{cutout:"72%",plugins:{legend:{display:false},tooltip:{enabled:false}}}});
+    return;
+  }
+  const pct = target>0 ? Math.min(value/target*100,100) : 0;
+  const rawPct = target>0 ? Math.round(value/target*100) : 0;
+  center.innerHTML='<span class="num">'+fmt(value)+'</span>';
+  rate.textContent="達成 "+rawPct+"%"; rate.style.color=color;
+  new Chart(el(canvasId),{type:"doughnut",data:{datasets:[{data:[pct,Math.max(100-pct,0)],backgroundColor:[color,TRACK],borderWidth:0}]},options:{cutout:"72%",rotation:-90,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataIndex===0?" 達成 "+rawPct+"%":" 未達 "+Math.max(100-rawPct,0)+"%"}}}}});
+}
+
+(async()=>{
+  let ga,stamp,drop,user,updated="–";
+  try{ ga=await loadOne(SRC.ga); }catch(e){ ga={records:[]}; }
+  try{ stamp=await loadOne(SRC.stamp); }catch(e){ stamp={records:[]}; }
+  try{ drop=await loadOne(SRC.drop); }catch(e){ drop={records:[]}; }
+  try{ user=await loadOne(SRC.user); }catch(e){ user={records:[]}; }
+  const gaR=ga.records||[], stR=stamp.records||[], drR=drop.records||[], usR=(user.records||[]).filter(r=>!r.del_flg);
+  updated = [
+    ...gaR.map(r=>r.event_date_time_jp),
+    ...stR.map(r=>r.action_occurred_at),
+    ...drR.map(r=>r.post_dated_at),
+    ...usR.map(r=>r.created_at)
+  ].filter(Boolean).sort().pop() || "–";
+  setText("metaUpdated2",updated);
+
+  // --- 実数 ---
+  const access = new Set(gaR.map(r=>r.user_pseudo_id).filter(Boolean)).size;   // 全アクセス数(UU)
+  const stampUsers = new Set(stR.map(r=>r.action_account_id).filter(Boolean)).size; // スタンプ獲得者数(ユニーク)
+  const poster = new Set(drR.map(r=>r.account_id).filter(Boolean)).size;        // 投稿者数(ユニーク)
+  const signup = new Set(usR.map(r=>r.account_id).filter(Boolean)).size;       // アカウント登録者数(user mart, 有効会員)
+  // survey はデータ未連携 → ブランク
+
+  // 目標キャプション
+  setText("t_access", fmt(CONFIG.targets.access||0));
+  setText("t_signup", fmt(CONFIG.targets.signup||0));
+  setText("t_stamp",  fmt(CONFIG.targets.stamp||0));
+  setText("t_poster", fmt(CONFIG.targets.poster||0));
+  setText("t_survey", fmt(CONFIG.targets.survey||0));
+
+  // --- ドーナツ（流入=灰 / 会員登録=青 / スタンプ=緑 / 投稿=紫 / アンケート=灰）---
+  donut("d_access","c_access","r_access","access",access,true);
+  donut("d_signup","c_signup","r_signup","signup",signup,true);   // user mart（mart_user.json）の有効会員数を反映
+  donut("d_stamp","c_stamp","r_stamp","stamp",stampUsers,true);
+  donut("d_poster","c_poster","r_poster","poster",poster,true);
+  donut("d_survey","c_survey","r_survey","survey",0,false);    // ブランク
+
+  // --- 時系列（日別）---
+  const accByDate=new Map();
+  gaR.forEach(r=>{ if(validDate(r.event_date_jp)){ if(!accByDate.has(r.event_date_jp))accByDate.set(r.event_date_jp,new Set()); if(r.user_pseudo_id)accByDate.get(r.event_date_jp).add(r.user_pseudo_id);} });
+  const stByDate=new Map();
+  stR.forEach(r=>{ const d=(r.event_date||"").slice(0,10); if(validDate(d)) stByDate.set(d,(stByDate.get(d)||0)+1); });
+  // 投稿者数（日別ユニーク投稿者）— drop データを account_id で個別カウント
+  const posterByDate=new Map();
+  drR.forEach(r=>{ const d=r.post_date || (r.post_dated_at||"").slice(0,10); if(validDate(d)){ if(!posterByDate.has(d))posterByDate.set(d,new Set()); if(r.account_id)posterByDate.get(d).add(r.account_id);} });
+  // 会員登録数（日別ユニーク登録者）— user mart（有効会員）を created_date で個別カウント
+  const signupByDate=new Map();
+  usR.forEach(r=>{ const d=r.created_date || (r.created_at||"").slice(0,10); if(validDate(d)){ if(!signupByDate.has(d))signupByDate.set(d,new Set()); if(r.account_id)signupByDate.get(d).add(r.account_id);} });
+  const dates=[...new Set([...accByDate.keys(),...stByDate.keys(),...posterByDate.keys(),...signupByDate.keys()])].sort();
+  const accVals=dates.map(d=>accByDate.has(d)?accByDate.get(d).size:0);
+  const stVals=dates.map(d=>stByDate.get(d)||0);
+  const posterVals=dates.map(d=>posterByDate.has(d)?posterByDate.get(d).size:0);
+  const signupVals=dates.map(d=>signupByDate.has(d)?signupByDate.get(d).size:0);
+  setText("trendMeta", dates.length ? (dates[0]+" ～ "+dates[dates.length-1]) : "データなし");
+  new Chart(el("trendChart"),{type:"line",data:{labels:dates,datasets:[
+    {label:"アクセスユーザー数(UU)",data:accVals,borderColor:CONFIG.colors.access,backgroundColor:"rgba(100,116,139,.08)",fill:true,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y"},
+    {label:"会員登録数",data:signupVals,borderColor:CONFIG.colors.signup,backgroundColor:"rgba(37,99,235,.06)",borderDash:[2,3],fill:false,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y1"},
+    {label:"スタンプ取得者数",data:stVals,borderColor:CONFIG.colors.stamp,backgroundColor:"rgba(47,143,102,.06)",fill:false,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y1"},
+    {label:"投稿者数",data:posterVals,borderColor:CONFIG.colors.poster,backgroundColor:"rgba(122,88,176,.06)",borderDash:[5,4],fill:false,tension:.25,pointRadius:2,pointHoverRadius:5,yAxisID:"y1"}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{position:"top",labels:{boxWidth:12,font:{size:11}}}},scales:{y:{position:"left",beginAtZero:true,ticks:{precision:0},title:{display:true,text:"アクセス(UU)",font:{size:10}}},y1:{position:"right",beginAtZero:true,ticks:{precision:0},grid:{drawOnChartArea:false},title:{display:true,text:"会員登録 / スタンプ / 投稿者",font:{size:10}}},x:{grid:{display:false}}}}});
+})();
+
+// --- ドーナツKPIカードのクリックで各詳細ページへ遷移 ---
+document.querySelectorAll(".kpi-card.linkable[data-href]").forEach(card=>{
+  const go=()=>{ window.location.href = card.getAttribute("data-href"); };
+  card.addEventListener("click", go);
+  card.addEventListener("keydown", e=>{ if(e.key==="Enter" || e.key===" "){ e.preventDefault(); go(); } });
+});
+</script></body></html>

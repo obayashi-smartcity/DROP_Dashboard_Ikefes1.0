@@ -1,0 +1,509 @@
+/* =========================================================================
+ *  dashboard-common.css
+ *  ------------------------------------------------------------------------
+ *  社内ダッシュボード共通デザインシステム（全ダッシュボード共通・編集禁止）
+ *
+ *  適用中: LINE Growth Tracker / ShopDrop Tracker
+ *  今後追加するダッシュボードも、本ファイルをそのまま読み込んで使用すること。
+ *
+ *  デザイン原則:
+ *    - ライト / フラット（影・グラデーション・角丸なし）
+ *    - 背景=グレー、パネル/タイル=白
+ *    - 見出し = Noto Sans JP 900（和英とも強いインパクト）/ 本文 = Inter
+ *    - 情報は「4色スロット」で意味を分類する
+ *        --attr（青） = スロット1：主体・属性系
+ *        --acq （緑） = スロット2：獲得・流入・チャネルB系
+ *        --rich（紫） = スロット3：行動・エンゲージメント系
+ *        --gray（灰） = 中立・全体・その他
+ *      ※ 各ダッシュボードごとに「どの軸にどの色を割り当てるか」は
+ *        config.js 側のコメントで明記すること（詳細は運用ガイド参照）。
+ *
+ *  使い方:
+ *    <link rel="stylesheet" href="dashboard-common.css">
+ *    <link rel="stylesheet" href="styles.css">  ← ページ固有の追加分のみ（任意）
+ * ========================================================================= */
+
+/* ============================== 1. Design Tokens ============================== */
+:root {
+  /* ---- Surfaces (ライト / 背景=グレー・タイル=白) ---- */
+  --bg:            #eef0f3;
+  --bg-a:          #eef0f3;
+  --bg-b:          #e9ebef;
+  --panel:         #ffffff;
+  --panel-2:       #ffffff;
+  --panel-hover:   #ffffff;
+  --stroke:        #e2e6ea;
+  --stroke-soft:   #eaedf0;
+
+  /* ---- Text ---- */
+  --text:          #1f2733;
+  --muted:         #5b636c;
+  --dim:           #8b949e;
+
+  /* ---- Domain accents（4色スロット。色相は固定・意味は各ページで再定義可） ---- */
+  --attr:          #3f66b3;   /* スロット1：青 */
+  --attr-soft:     rgba(79,119,196,.12);
+  --attr-line:     rgba(79,119,196,.45);
+  --acq:           #2f8f66;   /* スロット2：緑 */
+  --acq-soft:      rgba(63,158,116,.12);
+  --rich:          #7a58b0;   /* スロット3：紫 */
+  --rich-soft:     rgba(138,107,191,.12);
+  --gray:          #64748b;   /* 中立・全体 */
+  --gray-soft:     rgba(100,116,139,.12);
+
+  /* ---- Geometry ---- */
+  --radius:        0;      /* タイル(KPI/パネル)の角 = 直角。原則変更しない */
+  --radius-sm:     0;
+  --gap:           18px;
+  --sidebar-w:     248px;
+  --shadow:        none;   /* 立体感なし（フラット）。原則変更しない */
+
+  /* ---- Typography ----
+     Inter=本文 / Noto Sans JP 900=インパクトのある見出し(和英対応)
+     読み込みは各ページの <head> で Google Fonts から行う:
+     https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap
+  ---- */
+  --font: "Inter","Segoe UI",-apple-system,"Hiragino Kaku Gothic ProN",
+          "Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --font-display: "Noto Sans JP","Inter","Hiragino Kaku Gothic ProN",
+          "Yu Gothic UI","Meiryo",system-ui,sans-serif;
+
+  scroll-behavior: smooth;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 20px; }
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: .1px;
+}
+
+/* ============================== 2. Page Layout ============================== */
+.app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+
+/* ---- Sidebar (白) ---- */
+.sidebar {
+  border-right: 1px solid var(--stroke);
+  background: #ffffff;
+  padding: 22px 18px; position: sticky; top: 0; height: 100vh;
+  display: flex; flex-direction: column; gap: 22px;
+}
+.brand { display: flex; align-items: center; justify-content: flex-start; padding: 2px 2px 0; }
+.brand .brand-logo { width: 160px; max-width: 100%; height: auto; display: block; }
+.brand-logo-mobile { display: none; }
+
+.nav-group { display: flex; flex-direction: column; gap: 4px; }
+.nav-group .cap {
+  font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--dim); margin: 10px 8px 6px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+  border-radius: 10px; color: var(--muted); font-size: 13.5px; cursor: pointer;
+  transition: .15s; user-select: none;
+}
+.nav-item:hover { background: var(--bg); color: var(--text); }
+.nav-item.active { background: var(--gray-soft); color: var(--text); font-weight: 600; }
+/* data-target属性値がドメインキーと一致する場合、自動でアクセント色になる */
+.nav-item[data-target="attributes"].active  { background: var(--attr-soft); color: var(--attr); }
+.nav-item[data-target="acquisition"].active { background: var(--acq-soft);  color: var(--acq); }
+.nav-item[data-target="engagement"].active  { background: var(--rich-soft); color: var(--rich); }
+.nav-item .ic { width: 18px; text-align: center; opacity: .95; font-size: 14px; }
+.nav-item .ic.attr { color: var(--attr); }
+.nav-item .ic.acq  { color: var(--acq); }
+.nav-item .ic.rich { color: var(--rich); }
+
+.side-foot { margin-top: auto; font-size: 11px; color: var(--dim); line-height: 1.6; }
+.side-foot .dot { color: var(--acq); }
+.side-foot code { color: var(--muted); }
+
+/* ---- Main ---- */
+.main { padding: 24px 28px 48px; min-width: 0; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 18px; margin-bottom: 20px; flex-wrap: wrap; scroll-margin-top: 20px;
+}
+.topbar h1 {
+  font-family: var(--font-display);
+  font-size: 40px; margin: 0; font-weight: 900;
+  letter-spacing: -.5px; line-height: 1.05;
+}
+.topbar p  { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+.status {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--stroke); padding: 8px 14px; border-radius: 999px;
+}
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--acq); animation: pulse 2s infinite; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(47,143,102,.5); }
+  70% { box-shadow: 0 0 0 8px rgba(47,143,102,0); }
+  100% { box-shadow: 0 0 0 0 rgba(47,143,102,0); }
+}
+
+/* ---- Brand Hero Banner（任意・ロゴを大きく見せたい場合） ---- */
+.hero-brand {
+  margin: 8px 0 24px; padding: 30px 24px;
+  background: #ffffff; border: none; border-radius: 0;
+  box-shadow: none; display: grid; place-items: center;
+}
+.hero-brand img { max-width: 640px; width: 60%; height: auto; }
+@media (max-width: 760px) {
+  .hero-brand { padding: 20px 16px; }
+  .hero-brand img { width: 82%; }
+}
+
+/* ============================== 3. Panels & KPI ============================== */
+.panel {
+  background: var(--panel);
+  border: none; border-radius: 0;      /* 直角 */
+  padding: 20px; box-shadow: none; position: relative;
+}
+.panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom: 14px; gap: 10px; }
+.panel-head h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.panel-head .sub { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap); margin-bottom: 6px; }
+.kpis + .kpis { margin-top: 0; margin-bottom: var(--gap); }
+/* KPIが3枚構成のダッシュボードで使用 */
+.kpis.kpis-3 { grid-template-columns: repeat(3, 1fr); }
+
+.kpi {
+  background: var(--panel);
+  border: none; border-radius: 0;      /* 直角 */
+  padding: 16px 18px; position: relative; overflow: hidden; transition: .2s;
+}
+.kpi:hover { transform: none; box-shadow: none; }
+.kpi .k-label { font-size: 12px; color: var(--muted); letter-spacing:.4px; text-transform: uppercase; font-weight: 600; }
+.kpi .k-val   { font-size: 30px; font-weight: 700; margin: 8px 0 3px; letter-spacing:-.4px; font-variant-numeric: tabular-nums; }
+.kpi .k-val .u { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+.kpi .k-cap   { font-size: 11px; color: var(--dim); }
+/* KPIタイル上辺にドメイン色ラインを付ける場合の修飾クラス */
+.kpi.gray { border-top: 3px solid var(--gray); }
+.kpi.attr { border-top: 3px solid var(--attr); }
+.kpi.acq  { border-top: 3px solid var(--acq);  }
+.kpi.rich { border-top: 3px solid var(--rich); }
+.kpi.gray .k-val { color: var(--gray); }
+.kpi.attr .k-val { color: var(--attr); }
+.kpi.acq  .k-val { color: var(--acq);  }
+.kpi.rich .k-val { color: var(--rich); }
+
+/* ============================== 4. Date Slider ============================== */
+.slider-panel { margin-bottom: var(--gap); display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
+.slider-panel .s-title { font-size: 13px; font-weight:600; display:flex; align-items:center; gap:9px; }
+.slider-panel .s-title .ic { color: var(--gray); }
+.slider-wrap { flex: 1; min-width: 320px; padding: 6px 10px 2px; }
+.range-readout {
+  font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums;
+  background: var(--bg); border: none; padding: 7px 14px; border-radius: 0; white-space: nowrap;
+}
+.range-readout b { color: var(--gray); }
+/* noUiSlider theming (ライト) */
+.noUi-target { background: #dfe3e8; border: none; box-shadow: none; height: 6px; }
+.noUi-connect { background: linear-gradient(90deg, #94a3b8, var(--gray)); }
+.noUi-horizontal .noUi-handle {
+  width: 18px; height: 18px; right: -9px; top: -7px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--gray);
+  box-shadow: 0 2px 8px rgba(16,24,40,.25); cursor: grab;
+}
+.noUi-handle:before, .noUi-handle:after { display: none; }
+.noUi-tooltip {
+  background: #ffffff; color: var(--text); border: 1px solid var(--stroke);
+  font-size: 11px; padding: 3px 8px; border-radius: 0; font-family: var(--font);
+}
+
+/* ============================== 5. Grid & Section ============================== */
+.grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+.grid-line { display:grid; grid-template-columns: 1.9fr 1fr; gap: var(--gap); margin-bottom: 6px; }
+/* 折れ線を単独フル幅で置きたい場合（右の凡例パネルを使わない構成） */
+.grid-line-full { display: block; margin-bottom: 6px; }
+
+/* ---- Section label（ドメイン見出し） ---- */
+.section-label {
+  display:flex; align-items:baseline; gap: 12px; margin: 34px 2px 16px;
+  scroll-margin-top: 20px;
+}
+.section-label h2 {
+  margin:0;
+  font-family: var(--font-display);
+  font-size: 28px; font-weight: 900; letter-spacing: -.4px; line-height: 1.1;
+}
+.section-label h2 .note { font-size: 11.5px; color: var(--dim); font-weight: 500; margin-left: 8px; }
+.section-label p  { margin:4px 0 0; font-size: 12.5px; color: var(--dim); }
+.section-label .meta { margin-left: auto; font-size: 11.5px; color: var(--dim); white-space: nowrap; align-self: center; }
+/* ドメイン識別は「パネル上辺のカラーライン」のみで表現する（枠線・背景色は使わない） */
+.dom-attr .panel { border-top: 2px solid rgba(63,102,179,.55); }
+.dom-acq  .panel { border-top: 2px solid rgba(47,143,102,.55); }
+.dom-rich .panel { border-top: 2px solid rgba(122,88,176,.55); background: var(--panel); }
+
+/* ---- Chart canvas boxes ---- */
+.chart-box { position: relative; height: 240px; }
+.chart-box.tall { height: 300px; }
+.chart-box.auto { height: auto; min-height: 200px; }
+
+/* ---- Domain legend ---- */
+.domain-legend { display:flex; gap:12px; flex-direction:column; margin: 4px 2px 0; font-size: 12px; color: var(--muted); }
+.domain-legend span { display:inline-flex; align-items:center; gap:9px; }
+.domain-legend i { width:11px; height:11px; border-radius:0; display:inline-block; flex: none; }
+.lg-attr i { background: var(--attr); }
+.lg-acq  i { background: var(--acq); }
+.lg-rich i { background: var(--rich); }
+
+/* ---- Empty / loading / error states ---- */
+.empty-state {
+  height: 100%; min-height: 180px; display: grid; place-items: center; text-align: center;
+  color: var(--dim); font-size: 12.5px; border: 1px dashed var(--stroke-soft);
+  border-radius: 0; background: rgba(16,24,40,.02);
+}
+.empty-state b { display:block; color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+.state { padding: 40px; text-align:center; color: var(--muted); font-size: 13px; }
+.state.err { color: #e11d48; }
+
+.footer-note { margin-top: 28px; font-size: 11px; color: var(--dim); text-align:center; }
+.footer-note code { color: var(--muted); }
+
+/* ============================== 6. 複数ダッシュボード切替 ============================== */
+.switch-group { gap: 4px; }
+.switch-group .cap { margin-top: 2px; }
+a.switch-item {
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  border-radius: 10px;
+}
+a.switch-item:hover { background: var(--bg); color: var(--text); }
+a.switch-item.active {
+  background: var(--gray-soft);
+  color: var(--text);
+  font-weight: 600;
+  border-color: transparent;
+}
+/* モバイル用 切替チップ（デスクトップでは非表示） */
+.switch-mobile { display: none; }
+.switch-mobile .chip {
+  text-decoration: none; font-size: 12.5px; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--stroke);
+  padding: 8px 14px; border-radius: 999px; white-space: nowrap; transition: .15s;
+}
+.switch-mobile .chip:hover { color: var(--text); background: var(--bg); }
+.switch-mobile .chip-active { color: var(--text); font-weight: 600; background: var(--gray-soft); border-color: transparent; }
+@media (max-width: 760px) {
+  .switch-mobile { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
+}
+
+/* ---- ページ遷移フェード ---- */
+.page-fade { animation: pageIn .28s ease both; }
+@keyframes pageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.page-leave { opacity: 0; transform: translateY(-4px); transition: opacity .18s ease, transform .18s ease; }
+@media (prefers-reduced-motion: reduce) { .page-fade, .page-leave { animation: none; transition: none; transform: none; } }
+
+/* ============================== 7. 拡張コンポーネント（任意） ==============================
+ *  以下は「複数軸/複数プラットフォームの比較」が必要なダッシュボードでのみ使用する。
+ *  例: ShopDrop Tracker（DROP=attr青 / SHOP=acq緑 / 全体=gray灰）
+ * ============================================================================= */
+
+/* ---- セグメント切替（全体 / A / B など） ---- */
+.seg { display: inline-flex; border: 1px solid var(--stroke); border-radius: 8px; overflow: hidden; background: var(--bg); }
+.seg button {
+  border: none; background: transparent; padding: 5px 13px; font-size: 12px;
+  font-family: var(--font); color: var(--muted); cursor: pointer; transition: .15s; line-height: 1.4;
+}
+.seg button:not(:last-child) { border-right: 1px solid var(--stroke); }
+.seg button:hover { color: var(--text); }
+.seg button.active { background: #fff; color: var(--text); font-weight: 700; }
+.seg button[data-plat="DROP"].active { color: var(--attr); box-shadow: inset 0 -2px 0 var(--attr); }
+.seg button[data-plat="SHOP"].active { color: var(--acq);  box-shadow: inset 0 -2px 0 var(--acq);  }
+.seg button[data-plat="all"].active  { box-shadow: inset 0 -2px 0 var(--gray); }
+.line-sub { font-size: 11.5px; color: var(--dim); margin: 0 0 8px; font-variant-numeric: tabular-nums; }
+
+/* ---- 多段比較レイアウト（全体 / 軸A / 軸B）---- */
+.attr-tiers { display: block; }
+.attr-tiers .grid-2 { margin-bottom: 6px; }
+.tier-label { display: flex; align-items: center; gap: 10px; margin: 20px 2px 10px; padding-left: 10px; border-left: 3px solid var(--gray); }
+.tier-label:first-child { margin-top: 4px; }
+.tier-label .tier-name { font-family: var(--font-display); font-weight: 800; font-size: 16px; letter-spacing: -.2px; }
+.tier-label .tier-count { font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.tier-label.tier-all  { border-left-color: var(--gray); }
+.tier-label.tier-drop { border-left-color: var(--attr); }
+.tier-label.tier-shop { border-left-color: var(--acq);  }
+.tier-label.tier-all  .tier-name { color: var(--gray); }
+.tier-label.tier-drop .tier-name { color: var(--attr); }
+.tier-label.tier-shop .tier-name { color: var(--acq);  }
+.attr-tiers .tier-all  .panel { border-top: 2px solid rgba(100,116,139,.55); }
+.attr-tiers .tier-drop .panel { border-top: 2px solid rgba(63,102,179,.55); }
+.attr-tiers .tier-shop .panel { border-top: 2px solid rgba(47,143,102,.55); }
+
+/* ============================== 8. Responsive ============================== */
+@media (max-width: 1080px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .grid-line { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .main { padding: 16px 14px 40px; }
+  .kpis { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .kpis.kpis-3 { grid-template-columns: 1fr; }
+  .topbar h1 { font-size: 32px; }
+  .section-label h2 { font-size: 24px; }
+  .brand-logo-mobile { display: block; width: 132px; height: auto; margin: 0 0 12px; }
+  .seg button { padding: 5px 10px; font-size: 11.5px; }
+  .tier-label { margin: 16px 2px 8px; }
+}
+@media (max-width: 430px) {
+  .main { padding: 14px 12px 36px; }
+  .topbar { gap: 10px; margin-bottom: 16px; }
+  .topbar h1 { font-size: 27px; line-height: 1.1; word-break: break-word; }
+  .topbar p  { font-size: 11.5px; line-height: 1.45; }
+  .brand-logo-mobile { width: 120px; margin-bottom: 10px; }
+  .status { width: 100%; justify-content: flex-start; font-size: 11px; padding: 7px 12px; flex-wrap: wrap; }
+  .kpis { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi { padding: 12px 12px; }
+  .kpi .k-label { font-size: 10px; letter-spacing: .2px; line-height: 1.3; }
+  .kpi .k-val   { font-size: 22px; margin: 5px 0 2px; }
+  .kpi .k-val .u { font-size: 12px; }
+  .kpi .k-cap   { font-size: 10px; line-height: 1.35; }
+  .panel { padding: 14px; }
+  .panel-head { flex-wrap: wrap; gap: 4px; }
+  .panel-head h3 { font-size: 13px; }
+  .panel-head .sub { font-size: 10.5px; white-space: normal; }
+  .slider-panel { flex-direction: column; align-items: stretch; gap: 12px; }
+  .slider-wrap { min-width: 0; width: 100%; padding: 6px 4px 2px; }
+  .range-readout { white-space: normal; text-align: center; font-size: 12px; }
+  .section-label { flex-wrap: wrap; gap: 6px; margin: 26px 2px 12px; align-items: flex-start; }
+  .section-label h2 { font-size: 22px; }
+  .section-label h2 .note { display: block; margin-left: 0; margin-top: 2px; }
+  .section-label p { font-size: 11.5px; }
+  .section-label .meta { margin-left: 0; width: 100%; white-space: normal; align-self: flex-start; }
+  .domain-legend { font-size: 11.5px; }
+  .domain-legend span { align-items: flex-start; }
+  .chart-box { height: 220px; }
+  .chart-box.tall { height: 260px; }
+  .footer-note { font-size: 10.5px; line-height: 1.5; }
+}
+@media (max-width: 360px) {
+  .kpi .k-val { font-size: 20px; }
+  .kpi .k-label { font-size: 9.5px; }
+  .topbar h1 { font-size: 24px; }
+  .section-label h2 { font-size: 20px; }
+}
+
+
+/* ============================== 9. Post Detail Modal ============================== */
+body.modal-open { overflow: hidden; }
+.post-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(16, 24, 40, .78);
+}
+.post-modal.show { display: flex; }
+.post-modal-inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) minmax(300px, 1fr);
+  width: min(920px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+  background: #fff;
+  border-top: 3px solid var(--rich);
+  box-shadow: 0 22px 70px rgba(16, 24, 40, .35);
+}
+.post-modal-media {
+  display: grid;
+  place-items: center;
+  min-height: 680px;
+  background: #15171b;
+  overflow: hidden;
+}
+.post-modal-img {
+  display: block;
+  width: 100%;
+  height: min(80vh, 760px);
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  object-position: center;
+  background: var(--bg-b);
+}
+.post-modal-img[hidden], .post-modal-no-image[hidden] { display: none; }
+.post-modal-no-image {
+  color: #aeb4bd;
+  font-size: 13px;
+}
+.post-modal-body {
+  padding: 34px 30px;
+  overflow-y: auto;
+}
+.post-modal-user {
+  padding-right: 42px;
+  margin-bottom: 14px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.post-modal-time {
+  margin-top: 12px;
+  color: var(--dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.post-modal-text {
+  margin-top: 22px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.post-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, .96);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+.post-modal-close:hover,
+.post-modal-close:focus-visible {
+  color: var(--rich);
+  border-color: var(--rich);
+  outline: none;
+}
+@media (max-width: 760px) {
+  .post-modal { padding: 12px; align-items: flex-start; overflow-y: auto; }
+  .post-modal-inner {
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+  .post-modal-media { min-height: 0; }
+  .post-modal-img {
+    width: 100%;
+    height: auto;
+    max-height: 72vh;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+  }
+  .post-modal-body { padding: 22px 18px 28px; overflow: visible; }
+  .post-modal-user { font-size: 18px; }
+  .post-modal-close { position: fixed; top: 20px; right: 20px; }
+}

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DROP 投稿マップ — Dashboard</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- noUiSlider -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css" />
+
+  <!-- 共通デザインシステム（唯一の外部ファイル・編集禁止） -->
+  <link rel="stylesheet" href="dashboard-common.css" />
+
+  <!-- ===================== ページ固有スタイル（内包） =====================
+       投稿＝紫（--rich）テーマ。マーカー・チップ・KPI主要指標・パネルを
+       すべて紫（主役）＋グレー（中立）に統一。性別・年齢はラベルで区別。
+  ====================================================================== -->
+  <style>
+    /* ---- フィルタバー ---- */
+    .filter-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; margin-bottom: var(--gap); }
+    .filter-bar .f-full { grid-column: 1 / -1; }
+    .filter-group .f-title { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim); font-weight: 700; margin: 0 0 9px; display: flex; align-items: center; gap: 8px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip-btn { border: 1px solid var(--stroke); background: var(--bg); color: var(--muted); font-family: var(--font); font-size: 12.5px; padding: 7px 14px; border-radius: 0; cursor: pointer; transition: .15s; line-height: 1.3; white-space: nowrap; user-select: none; }
+    .chip-btn:hover { color: var(--text); background: #fff; }
+    /* 投稿＝紫テーマ：選択チップは紫で統一 */
+    .chip-btn.on { background: var(--rich-soft); color: var(--rich); font-weight: 700; border-color: var(--rich); }
+
+    .filter-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
+    .filter-foot .f-count { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .filter-foot .f-count b { color: var(--rich); font-weight: 800; }
+    .reset-btn { border: 1px solid var(--stroke); background: #fff; color: var(--muted); font-family: var(--font); font-size: 12px; padding: 7px 16px; cursor: pointer; border-radius: 0; transition: .15s; }
+    .reset-btn:hover { color: var(--text); background: var(--bg); border-color: var(--rich); }
+
+    .time-readout { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; margin-bottom: 12px; }
+    .time-readout b { color: var(--rich); }
+
+    /* ---- 地図 ---- */
+    .map-box { height: 520px; width: 100%; position: relative; background: var(--bg-b); }
+    #map { height: 100%; width: 100%; }
+    .leaflet-container { font-family: var(--font); background: #e9ebef; }
+    .leaflet-popup-content-wrapper { border-radius: 0; box-shadow: 0 6px 24px rgba(16,24,40,.18); }
+    .leaflet-popup-content { margin: 0; width: 240px !important; }
+    .leaflet-popup-tip { box-shadow: none; }
+    .pin-pop img { width: 100%; height: 130px; object-fit: cover; display: block; background: var(--bg); }
+    .pin-pop .pp-body { padding: 10px 12px 12px; }
+    .pin-pop .pp-name { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .pin-pop .pp-sen { font-size: 12px; color: var(--muted); line-height: 1.5; white-space: pre-wrap; }
+    .pin-pop .pp-meta { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* 投稿ピンは紫で統一 */
+    .pin { width: 16px; height: 16px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(16,24,40,.4); border-radius: 50%; background: var(--rich); }
+
+    .map-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--muted); }
+    .map-legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .map-legend i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; background: var(--rich); }
+
+    /* ---- 投稿一覧 ---- */
+    .post-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+    .post-card { background: #fff; border: 1px solid var(--stroke); cursor: pointer; transition: .15s; display: flex; flex-direction: column; overflow: hidden; }
+    .post-card:hover { border-color: var(--rich); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(16,24,40,.08); }
+    .post-card.hl { border-color: var(--rich); box-shadow: 0 0 0 2px var(--rich-soft); }
+    .post-card .pc-img { width: 100%; height: 150px; object-fit: cover; background: var(--bg-b); display: block; }
+    .post-card .pc-body { padding: 11px 12px 13px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+    .post-card .pc-sen { font-size: 12.5px; color: var(--text); line-height: 1.55; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .post-card .pc-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .post-card .pc-name { font-size: 11.5px; color: var(--muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .post-card .pc-time { font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .badges { display: flex; gap: 5px; flex-wrap: wrap; }
+    .badge { font-size: 10px; padding: 2px 7px; border-radius: 0; font-weight: 700; letter-spacing: .3px; line-height: 1.4; border: 1px solid transparent; }
+    /* 性別バッジ＝紫トーン / 年齢・時刻＝中立 */
+    .badge.gender { background: var(--rich-soft); color: var(--rich); }
+    .badge.age  { background: var(--bg); color: var(--muted); border-color: var(--stroke); }
+    .badge.gray { background: var(--gray-soft); color: var(--gray); }
+
+    .list-head-meta { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+    .more-wrap { text-align: center; margin-top: 22px; }
+    .more-btn { border: 1px solid var(--stroke); background: #fff; color: var(--muted); font-family: var(--font); font-size: 13px; padding: 10px 28px; cursor: pointer; border-radius: 0; transition: .15s; }
+    .more-btn:hover { color: var(--text); background: var(--bg); border-color: var(--rich); }
+
+    @media (max-width: 1080px) { .filter-bar { grid-template-columns: 1fr; } .map-box { height: 440px; } }
+    @media (max-width: 760px)  { .map-box { height: 360px; } .post-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } .post-card .pc-img { height: 120px; } }
+    @media (max-width: 430px)  { .map-box { height: 320px; } .post-grid { grid-template-columns: 1fr 1fr; } }
+    /* ---- サイドバー内フィルタ ---- */
+    .sidebar-filter { display:flex; flex-direction:column; gap:14px; }
+    .sidebar-filter .cap { font-size:10.5px; letter-spacing:1.4px; text-transform:uppercase; color:var(--dim); margin:0 2px 2px; }
+    .sidebar-filter .filter-bar { display:flex; flex-direction:column; gap:14px; margin:0; }
+    .sidebar-filter .filter-group .f-title { margin:0 0 7px; }
+    .sidebar-filter .chips { gap:6px; }
+    .sidebar-filter .chip-btn { font-size:11px; padding:5px 9px; }
+    .sidebar-filter .slider-wrap { min-width:0; padding:8px 4px 2px; }
+    .sidebar-filter .time-readout { font-size:11px; margin-bottom:6px; }
+    .sidebar-filter .filter-foot { flex-direction:column; align-items:stretch; gap:8px; margin-top:2px; }
+    .sidebar-filter .reset-btn { width:100%; }
+    .sidebar-filter .f-count { font-size:11.5px; }
+    /* noUiSlider をテーマ色（紫）に */
+    .sidebar-filter .noUi-connect { background: linear-gradient(90deg, #a98cd0, var(--rich)); }
+    .sidebar-filter .noUi-horizontal .noUi-handle { border-color: var(--rich); }
+
+    /* ---- シックな文字ベース ナビ（SVGアイコン付き・紫アクセント） ---- */
+    .sidebar { --accent: var(--gray); }
+    .switch-group { gap: 1px; }
+    .switch-group .cap { margin: 10px 8px 10px; }
+    a.switch-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 10px 9px 12px;
+      border: none; background: transparent; border-radius: 0;
+      border-left: 2px solid transparent;
+      color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .2px;
+      transition: color .15s, border-color .15s;
+    }
+    a.switch-item:hover { background: transparent; color: var(--text); border-left-color: var(--stroke); }
+    a.switch-item.active { background: transparent; color: var(--text); font-weight: 700; border-left-color: var(--accent); }
+    a.switch-item .mi { width: 17px; height: 17px; flex: none; color: var(--dim); display: inline-flex; align-items: center; justify-content: center; transition: color .15s; }
+    a.switch-item:hover .mi { color: var(--muted); }
+    a.switch-item.active .mi { color: var(--accent); }
+    .switch-item .mi svg { width: 100%; height: 100%; display: block; }
+  </style>
+</head>
+<body class="page-fade">
+  <div class="app">
+    <!-- ============ Sidebar ============ -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div style="font-family:var(--font-display);font-weight:900;font-size:22px;letter-spacing:-.5px;line-height:1.1;">
+          DROP<span style="color:var(--gray);">.</span><br>
+          <span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;">TRACKER</span>
+        </div>
+      </div>
+
+      <nav class="nav-group switch-group">
+      <div class="cap">Dashboards</div>
+      <a class="switch-item" href="index.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v6M10 8v11M15 4v15M20 11v8"/></svg></span>Summary</a>
+      <a class="switch-item" href="details_inflow.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>流入分析</a>
+      <a class="switch-item" href="details_user.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/></svg></span>アカウント登録</a>
+      <a class="switch-item" href="details_stamp.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M9.7 9.2l1.7 1.7 3-3.4"/><path d="M8.3 14.2L7 21l5-2.2 5 2.2-1.3-6.8"/></svg></span>スタンプ</a>
+      <a class="switch-item active" href="details_drop.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5L3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5l-6-2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></span>投稿</a>
+    </nav>
+
+      <div class="nav-group sidebar-filter">
+        <div class="panel-head">
+          <h3>🔎 フィルタ</h3>
+          <span class="sub">性別・年齢・投稿日で絞り込み</span>
+        </div>
+
+        <div class="filter-bar">
+          <div class="filter-group">
+            <div class="f-title">性別</div>
+            <div class="chips" id="genderChips"></div>
+          </div>
+
+          <div class="filter-group">
+            <div class="f-title">年齢層</div>
+            <div class="chips" id="ageChips"></div>
+          </div>
+
+          <div class="filter-group f-full">
+            <div class="f-title">投稿日</div>
+            <div class="time-readout" id="timeReadout">–</div>
+            <div class="slider-wrap" style="padding-left:0;padding-right:6px;">
+              <div id="timeSlider"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-foot">
+          <div class="f-count" id="filterCount">–</div>
+          <button class="reset-btn" id="resetBtn">条件をリセット</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h1>DROP Post Map</h1>
+        </div>
+        <div class="status"><span class="pulse"></span> latest timestamp: <b>&nbsp;<span id="metaUpdated2">–</span></b></div>
+      </div>
+
+      <!-- モバイル用ダッシュボード切替 -->
+      <div class="switch-mobile"><a class="chip" href="index.html">Summary</a><a class="chip" href="details_inflow.html">流入分析</a><a class="chip" href="details_user.html">アカウント登録</a><a class="chip" href="details_stamp.html">スタンプ</a><a class="chip chip-active" href="details_drop.html">投稿</a></div>
+
+      <!-- KPI（紫＝主要指標 / グレー＝中立） -->
+      <div class="kpis">
+        <div class="kpi rich"><div class="k-label">総投稿数</div><div class="k-val" id="kTotal">–</div><div class="k-cap">全レコード</div></div>
+        <div class="kpi gray"><div class="k-label">表示中</div><div class="k-val" id="kShown">–</div><div class="k-cap">フィルタ適用後</div></div>
+        <div class="kpi rich"><div class="k-label">投稿者数</div><div class="k-val" id="kUsers">–</div><div class="k-cap">ユニークアカウント</div></div>
+        <div class="kpi gray"><div class="k-label">スポット数</div><div class="k-val" id="kSpots">–</div><div class="k-cap">おおよその地点数</div></div>
+      </div>
+<!-- ============ 上段：地図 ============ -->
+      <div class="section-label" id="map-section">
+        <h2>Post Map <span class="note">タップで投稿を表示</span></h2>
+        <div class="meta">ピンをタップすると内容が表示されます</div>
+      </div>
+      <div class="panel map-panel dom-rich" style="border-top:2px solid rgba(122,88,176,.55);">
+        <div class="map-box"><div id="map"></div></div>
+        <div class="map-legend">
+          <span><i></i> 投稿地点</span>
+          <span style="color:var(--dim);">ピンをタップすると投稿内容・投稿者・投稿日時が表示されます</span>
+        </div>
+      </div>
+
+      <!-- ============ 下段：投稿一覧 ============ -->
+      <div class="section-label" id="list-section">
+        <h2>Post List</h2>
+        <div class="meta list-head-meta" id="listMeta">–</div>
+      </div>
+      <div class="panel dom-rich" style="border-top:2px solid rgba(122,88,176,.55);">
+        <div class="post-grid" id="postGrid">
+          <div class="empty-state" style="grid-column:1/-1"><b>読み込み中…</b>json/mart_action_drop.json を取得しています</div>
+        </div>
+        <div class="more-wrap" id="moreWrap"></div>
+      </div>
+
+      <div class="footer-note">
+        データソース: <code>json/mart_action_drop.json</code> ・ イベント <code>ikefes-2025</code> ・
+        本ダッシュボードは社内デザインシステム（dashboard-common.css）に準拠しています。
+      </div>
+    </main>
+  </div>
+
+
+  <!-- ============ 投稿詳細モーダル ============ -->
+  <div id="postModal" class="post-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modalUser">
+    <div class="post-modal-inner" role="document">
+      <button id="modalClose" class="post-modal-close" type="button" aria-label="投稿詳細を閉じる">&times;</button>
+      <div class="post-modal-media">
+        <img id="modalImg" class="post-modal-img" alt="投稿画像">
+        <div id="modalNoImage" class="post-modal-no-image">画像はありません</div>
+      </div>
+      <div class="post-modal-body">
+        <div id="modalUser" class="post-modal-user"></div>
+        <div id="modalBadges" class="badges"></div>
+        <div id="modalTime" class="post-modal-time"></div>
+        <div id="modalText" class="post-modal-text"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <!-- 共通設定（CARTO APIキー等を一元管理）。地図設定は config.js の map で差し替え -->
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+
+  <!-- ===================== ページ固有ロジック（内包） ===================== -->
+  <script>
+  /* --- カラー割当 ---
+   *   投稿＝紫（--rich）で統一（地図ピン/一覧/フィルタ/KPI主要指標/パネル）
+   *   中立・補助指標は グレー（--gray）
+   *   ※ 性別・年齢は「フィルタの絞り込み軸」。色分けはせずラベルで区別する。
+   */
+  /* CARTO 地図設定は config.js（DASHBOARD_CONFIG.map）で一元管理。
+     未読込時に備えたフォールバックを用意（APIキー等の差し替えは config.js のみでOK）。 */
+  const MAP_CFG = (typeof DASHBOARD_CONFIG !== "undefined" && DASHBOARD_CONFIG.map) ? DASHBOARD_CONFIG.map : {
+    cartoApiKey: "",
+    tile: "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  };
+  const CONFIG = {
+    dataSource: "json/mart_action_drop.json",
+    map: {
+      center: [34.6905, 135.5023], zoom: 13, minZoom: 10, maxZoom: 18,
+      // CARTO ベースマップ設定は config.js から取得（APIキーの差し替えは config.js のみ）
+      cartoApiKey: MAP_CFG.cartoApiKey,
+      tile: MAP_CFG.tile,
+      attribution: MAP_CFG.attribution
+    },
+    genderLabel: (g) => (g && g.trim() !== "" ? g : "施設・運営"),
+    ageOrder: ["20代", "30代", "40代", "50代", "60代", "70代", ""],
+    ageLabel: (a) => (a && a.trim() !== "" ? a : "未設定"),
+    genderOrder: ["男性", "女性", "無回答", ""],
+    pageSize: 24
+  };
+
+  const el = (id) => document.getElementById(id);
+  const setText = (id, v) => { const e = el(id); if (e) e.textContent = v; };
+  const esc = (t) => (t == null ? "" : String(t)).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const state = { genders: new Set(), ages: new Set(), dmin: null, dmax: null, limit: CONFIG.pageSize };
+  let POSTS = [], DATES = [], map, markerLayer, markerById = {}, sliderBuilt = false;
+
+  // JSON を直接参照して描画用に整形
+  function normalize(records) {
+    const out = [];
+    for (const r of records) {
+      const lat = r.latitude, lng = r.longitude;
+      if (lat == null || lng == null) continue;
+      out.push({
+        id: r.artwork_id, s: r.sentence || "", n: r.account_name || "",
+        g: r.gender || "", a: r.age_group || "", t: r.post_dated_at || "",
+        // post_date は "YYYY-MM-DD" 形式。無ければ post_dated_at の日付部を使用
+        date: r.post_date || (r.post_dated_at || "").slice(0, 10),
+        lat, lng, img: r.image_file_path_thumbnail || ""
+      });
+    }
+    return out;
+  }
+
+  function pinIcon() {
+    return L.divIcon({ className: "", html: `<div class="pin"></div>`, iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -10] });
+  }
+
+  function popupHtml(p) {
+    const img = p.img ? `<img src="${esc(p.img)}" loading="lazy" onerror="this.style.display='none'">` : "";
+    return `<div class="pin-pop">${img}<div class="pp-body">
+      <div class="pp-name">${esc(p.n)}</div>
+      <div class="pp-sen">${esc(p.s)}</div>
+      <div class="pp-meta">
+        <span class="badge gender">${esc(CONFIG.genderLabel(p.g))}</span>
+        <span class="badge age">${esc(CONFIG.ageLabel(p.a))}</span>
+        <span class="badge gray">${esc(p.t)}</span>
+      </div></div></div>`;
+  }
+
+  function pass(p) {
+    if (state.genders.size && !state.genders.has(p.g)) return false;
+    if (state.ages.size && !state.ages.has(p.a)) return false;
+    if (p.date) {
+      const di = DATES.indexOf(p.date);
+      if (di < 0 || di < state.dmin || di > state.dmax) return false;
+    }
+    return true;
+  }
+
+
+  function openPostModal(p) {
+    const modal = el("postModal");
+    const img = el("modalImg");
+    const noImage = el("modalNoImage");
+
+    if (p.img) {
+      img.src = p.img;
+      img.alt = (p.n ? p.n + "さんの" : "") + "投稿画像";
+      img.hidden = false;
+      noImage.hidden = true;
+    } else {
+      img.removeAttribute("src");
+      img.hidden = true;
+      noImage.hidden = false;
+    }
+
+    setText("modalUser", p.n || "投稿者名なし");
+    setText("modalTime", p.t || "");
+    setText("modalText", p.s || "");
+    el("modalBadges").innerHTML = `
+      <span class="badge gender">${esc(CONFIG.genderLabel(p.g))}</span>
+      <span class="badge age">${esc(CONFIG.ageLabel(p.a))}</span>
+    `;
+
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    el("modalClose").focus();
+  }
+
+  function closePostModal() {
+    const modal = el("postModal");
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
+  }
+
+  el("modalClose").addEventListener("click", closePostModal);
+  el("postModal").addEventListener("click", (event) => {
+    if (event.target === el("postModal")) closePostModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && el("postModal").classList.contains("show")) closePostModal();
+  });
+  el("modalImg").addEventListener("error", () => {
+    el("modalImg").hidden = true;
+    el("modalNoImage").hidden = false;
+  });
+
+function render() {
+  const filtered = POSTS
+    .filter(pass)
+    .sort((a, b) => {
+      const da = new Date(a.t || a.date || 0);
+      const db = new Date(b.t || b.date || 0);
+      return db - da;   // 新しい順
+    });
+
+  markerLayer.clearLayers();
+    markerById = {};
+    filtered.forEach(p => {
+      const m = L.marker([p.lat, p.lng], { icon: pinIcon() });
+      m.on("click", () => {
+        highlightCard(p.id);
+        openPostModal(p);
+      });
+      m.addTo(markerLayer);
+      markerById[p.id] = m;
+    });
+
+    setText("kTotal", POSTS.length);
+    setText("kShown", filtered.length);
+    setText("kUsers", new Set(filtered.map(p => p.n)).size);
+    setText("kSpots", new Set(filtered.map(p => p.lat.toFixed(4) + "," + p.lng.toFixed(4))).size);
+    el("filterCount").innerHTML = `絞り込み結果 <b>${filtered.length}</b> 件 / 全 ${POSTS.length} 件`;
+
+    renderList(filtered);
+  }
+
+  function renderList(filtered) {
+    const shown = filtered.slice(0, state.limit);
+    setText("listMeta", `${filtered.length} 件中 ${shown.length} 件を表示`);
+
+    if (!filtered.length) {
+      el("postGrid").innerHTML = `<div class="empty-state" style="grid-column:1/-1"><b>該当する投稿がありません</b>フィルタ条件を変更してください</div>`;
+      el("moreWrap").innerHTML = "";
+      return;
+    }
+
+    el("postGrid").innerHTML = shown.map(p => {
+      const img = p.img ? `<img class="pc-img" src="${esc(p.img)}" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="pc-img"></div>`;
+      return `<article class="post-card" data-id="${esc(p.id)}">
+        ${img}
+        <div class="pc-body">
+          <div class="pc-sen">${esc(p.s)}</div>
+          <div class="badges">
+            <span class="badge gender">${esc(CONFIG.genderLabel(p.g))}</span>
+            <span class="badge age">${esc(CONFIG.ageLabel(p.a))}</span>
+          </div>
+          <div class="pc-foot">
+            <span class="pc-name">${esc(p.n)}</span>
+            <span class="pc-time">${esc(p.t)}</span>
+          </div>
+        </div>
+      </article>`;
+    }).join("");
+
+    el("postGrid").querySelectorAll(".post-card").forEach(card => {
+      card.addEventListener("click", () => {
+        const id = card.getAttribute("data-id");
+        const p = POSTS.find(x => x.id === id);
+        if (!p) return;
+        highlightCard(p.id);
+        openPostModal(p);
+      });
+    });
+
+    el("moreWrap").innerHTML = (shown.length < filtered.length)
+      ? `<button class="more-btn" id="moreBtn">さらに表示（残り ${filtered.length - shown.length} 件）</button>`
+      : "";
+    const mb = el("moreBtn");
+    if (mb) mb.addEventListener("click", () => { state.limit += CONFIG.pageSize; renderList(filtered); });
+  }
+
+  function highlightCard(id) {
+    const grid = el("postGrid");
+    grid.querySelectorAll(".post-card.hl").forEach(c => c.classList.remove("hl"));
+    const card = grid.querySelector(`.post-card[data-id="${id}"]`);
+    if (card) { card.classList.add("hl"); }
+  }
+
+  function buildChips() {
+    // デフォルトは全選択（存在する値をすべて state に追加し .on 表示）
+    el("genderChips").innerHTML = CONFIG.genderOrder.map(g => {
+      const n = POSTS.filter(p => p.g === g).length;
+      if (!n) return "";
+      state.genders.add(g);
+      return `<button class="chip-btn on" data-type="g" data-val="${esc(g)}">${esc(CONFIG.genderLabel(g))} <span style="opacity:.6">${n}</span></button>`;
+    }).join("");
+
+    el("ageChips").innerHTML = CONFIG.ageOrder.map(a => {
+      const n = POSTS.filter(p => p.a === a).length;
+      if (!n) return "";
+      state.ages.add(a);
+      return `<button class="chip-btn on" data-type="a" data-val="${esc(a)}">${esc(CONFIG.ageLabel(a))} <span style="opacity:.6">${n}</span></button>`;
+    }).join("");
+
+    document.querySelectorAll(".chip-btn[data-type]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const set = btn.getAttribute("data-type") === "g" ? state.genders : state.ages;
+        const val = btn.getAttribute("data-val");
+        if (set.has(val)) { set.delete(val); btn.classList.remove("on"); }
+        else { set.add(val); btn.classList.add("on"); }
+        state.limit = CONFIG.pageSize;
+        render();
+      });
+    });
+  }
+
+  function buildSlider() {
+    const slider = el("timeSlider"), readout = el("timeReadout");
+    const maxIdx = Math.max(DATES.length - 1, 0);
+    noUiSlider.create(slider, {
+      start: [0, maxIdx], connect: true, step: 1, range: { min: 0, max: maxIdx || 1 },
+      format: { to: v => Math.round(v), from: v => Math.round(v) }
+    });
+    slider.noUiSlider.on("update", (vals) => {
+      state.dmin = +vals[0]; state.dmax = +vals[1];
+      readout.innerHTML = `投稿日 <b>${esc(DATES[state.dmin] || "–")}</b> 〜 <b>${esc(DATES[state.dmax] || "–")}</b>`;
+    });
+    slider.noUiSlider.on("change", () => { state.limit = CONFIG.pageSize; render(); });
+    sliderBuilt = true;
+  }
+
+  el("resetBtn").addEventListener("click", () => {
+    // リセット＝全選択に戻す
+    state.genders.clear(); state.ages.clear();
+    document.querySelectorAll(".chip-btn[data-type]").forEach(b => {
+      b.classList.add("on");
+      const set = b.getAttribute("data-type") === "g" ? state.genders : state.ages;
+      set.add(b.getAttribute("data-val"));
+    });
+    state.dmin = 0; state.dmax = Math.max(DATES.length - 1, 0); state.limit = CONFIG.pageSize;
+    if (sliderBuilt) el("timeSlider").noUiSlider.set([0, Math.max(DATES.length - 1, 0)]);
+    render();
+  });
+
+  // 地図はデータ取得前に初期化しておく
+  map = L.map("map", { center: CONFIG.map.center, zoom: CONFIG.map.zoom, minZoom: CONFIG.map.minZoom, maxZoom: CONFIG.map.maxZoom, scrollWheelZoom: true });
+  // API キーがあればタイルURLに key クエリを付与
+  const tileUrl = CONFIG.map.cartoApiKey
+    ? CONFIG.map.tile + (CONFIG.map.tile.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(CONFIG.map.cartoApiKey)
+    : CONFIG.map.tile;
+  L.tileLayer(tileUrl, { attribution: CONFIG.map.attribution, maxZoom: CONFIG.map.maxZoom }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+
+  // ---- JSON を直接参照して起動 ----
+  fetch(CONFIG.dataSource)
+    .then(res => { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+    .then(json => {
+      const records = json.records || [];
+      POSTS = normalize(records);
+
+      DATES = Array.from(new Set(POSTS.map(p => p.date).filter(Boolean))).sort();
+      state.dmin = 0; state.dmax = Math.max(DATES.length - 1, 0);
+
+      const latest = records.map(r => r.post_dated_at).filter(Boolean).sort().pop();
+      setText("metaUpdated2", latest || "–");
+
+      buildChips();
+      buildSlider();
+      render();
+      setTimeout(() => {
+        map.invalidateSize();
+        // データの緯度経度から自動的に地図の中心・ズームを合わせる
+        const pts = POSTS.filter(p => p.lat != null && p.lng != null).map(p => [p.lat, p.lng]);
+        if (pts.length) {
+          map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] });
+        }
+      }, 200);
+    })
+    .catch(err => {
+      el("postGrid").innerHTML = `<div class="empty-state" style="grid-column:1/-1"><b>データを読み込めませんでした</b>${esc(String(err.message))}<br>ローカルで開く場合は簡易サーバー経由で表示してください（file:// では fetch できません）</div>`;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>会員属性分析 — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <!-- noUiSlider -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css" />
+  <link rel="stylesheet" href="dashboard-common.css" />
+  <style>
+    /* ===== 会員属性分析＝ブルー（--attr）テーマ ===== */
+    .sidebar { --accent: var(--attr); }
+    .switch-group { gap: 1px; }
+    .switch-group .cap { margin: 10px 8px 10px; }
+    a.switch-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 10px 9px 12px;
+      border: none; background: transparent; border-radius: 0;
+      border-left: 2px solid transparent;
+      color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .2px;
+      transition: color .15s, border-color .15s;
+    }
+    a.switch-item:hover { background: transparent; color: var(--text); border-left-color: var(--stroke); }
+    a.switch-item.active { background: transparent; color: var(--text); font-weight: 700; border-left-color: var(--accent); }
+    a.switch-item .mi { width: 17px; height: 17px; flex: none; color: var(--dim); display: inline-flex; align-items: center; justify-content: center; transition: color .15s; }
+    a.switch-item:hover .mi { color: var(--muted); }
+    a.switch-item.active .mi { color: var(--accent); }
+    .switch-item .mi svg { width: 100%; height: 100%; display: block; }
+    /* ---- サイドバー内フィルタ（スライダー式） ---- */
+    .sidebar-filter { display:flex; flex-direction:column; gap:10px; }
+    .sidebar-filter .cap { font-size:10.5px; letter-spacing:1.4px; text-transform:uppercase; color:var(--dim); margin:0 2px 2px; }
+    .sidebar-filter .panel-head { margin-bottom:2px; }
+    .sidebar-filter .f-title { font-size:11px; letter-spacing:1.2px; text-transform:uppercase; color:var(--dim); font-weight:700; margin:0 0 8px; }
+    .sidebar-filter .time-readout { font-size:11.5px; color:var(--text); font-variant-numeric:tabular-nums; margin-bottom:8px; }
+    .sidebar-filter .time-readout b { color:var(--attr); }
+    .sidebar-filter .slider-wrap { min-width:0; padding:8px 6px 2px 0; }
+    .sidebar-filter .filter-foot { display:flex; flex-direction:column; align-items:stretch; gap:8px; margin-top:12px; }
+    .sidebar-filter .f-count { font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .sidebar-filter .reset-btn { width:100%; border:1px solid var(--stroke); background:#fff; color:var(--muted); font:12px var(--font); padding:8px 10px; cursor:pointer; border-radius:0; transition:.15s; }
+    .sidebar-filter .reset-btn:hover { color:var(--text); background:var(--bg); border-color:var(--attr); }
+    .sidebar-filter .noUi-connect { background: linear-gradient(90deg,#7ea0e0,var(--attr)); }
+    .sidebar-filter .noUi-horizontal .noUi-handle { border-color: var(--attr); }
+    .chart-box.daily { height:320px; }
+    .attr-flex { display:grid; grid-template-columns:1fr 1fr; gap:var(--gap); align-items:start; }
+    .attr-col { min-width:0; }
+    .attr-list { display:flex; flex-direction:column; gap:4px; }
+    .attr-row { display:grid; grid-template-columns:minmax(120px, .8fr) 2fr 70px; gap:14px; align-items:center; padding:10px 6px; border-bottom:1px solid var(--stroke-soft); }
+    .attr-name { min-width:0; }
+    .attr-name b { display:block; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .attr-name small { color:var(--dim); font-size:10.5px; }
+    .bar-track { height:10px; background:var(--bg-b); }
+    .bar { height:100%; background:var(--attr); min-width:1px; }
+    .attr-value { text-align:right; font-weight:800; color:var(--attr); font-variant-numeric:tabular-nums; }
+    @media (max-width:900px) { .attr-flex { grid-template-columns:1fr; } }
+    @media (max-width:760px) { .chart-box.daily{height:270px} .attr-row{grid-template-columns:1fr 60px} .bar-track{grid-column:1/-1;grid-row:2} .attr-value{grid-column:2;grid-row:1} }
+  </style>
+</head>
+<body class="page-fade">
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div style="font-family:var(--font-display);font-weight:900;font-size:22px;letter-spacing:-.5px;line-height:1.1;">DROP<span style="color:var(--attr);">.</span><br><span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;">TRACKER</span></div></div>
+    <nav class="nav-group switch-group">
+      <div class="cap">Dashboards</div>
+      <a class="switch-item" href="index.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v6M10 8v11M15 4v15M20 11v8"/></svg></span>Summary</a>
+      <a class="switch-item" href="details_inflow.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>流入分析</a>
+      <a class="switch-item active" href="details_user.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/></svg></span>アカウント登録</a>
+      <a class="switch-item" href="details_stamp.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M9.7 9.2l1.7 1.7 3-3.4"/><path d="M8.3 14.2L7 21l5-2.2 5 2.2-1.3-6.8"/></svg></span>スタンプ</a>
+      <a class="switch-item" href="details_drop.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5L3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5l-6-2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></span>投稿</a>
+    </nav>
+    <div class="nav-group sidebar-filter">
+      <div class="panel-head"><h3>フィルタ</h3><span class="sub">登録日で絞り込み</span></div>
+      <div class="filter-group">
+        <div class="f-title">登録期間</div>
+        <div class="time-readout" id="timeReadout">–</div>
+        <div class="slider-wrap"><div id="dateSlider"></div></div>
+      </div>
+      <div class="filter-foot">
+        <div class="f-count" id="filterMeta">–</div>
+        <button class="reset-btn" id="resetBtn">全期間</button>
+      </div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><div><h1>User Attributes</h1><p>会員属性・登録ユーザーの分析</p></div><div class="status"><span class="pulse"></span> latest timestamp: <b>&nbsp;<span id="metaUpdated2">–</span></b></div></div>
+    <div class="switch-mobile"><a class="chip" href="index.html">Summary</a><a class="chip" href="details_inflow.html">流入分析</a><a class="chip chip-active" href="details_user.html">アカウント登録</a><a class="chip" href="details_stamp.html">スタンプ</a><a class="chip" href="details_drop.html">投稿</a></div>
+    <div class="kpis kpis-3">
+      <div class="kpi attr"><div class="k-label">総登録ユーザー数</div><div class="k-val" id="kUsers">–</div><div class="k-cap">account_id 個別カウント（有効会員）</div></div>
+      <div class="kpi attr"><div class="k-label">対象日数</div><div class="k-val" id="kDays">–</div><div class="k-cap">選択期間内の登録日</div></div>
+      <div class="kpi attr"><div class="k-label">運用アカウント数</div><div class="k-val" id="kOps">–</div><div class="k-cap">is_operation_member = true</div></div>
+    </div>
+    <div class="section-label" id="daily-section"><h2>New Sign-Ups <span class="note">日別新規登録ユーザー数</span></h2></div>
+    <div class="panel" style="border-top:2px solid rgba(63,102,179,.55);"><div class="panel-head"><h3>登録日の折れ線グラフ</h3><span class="sub">COUNT(account_id) grouped by created_at</span></div><div class="chart-box daily"><canvas id="dailyChart"></canvas></div></div>
+    <div class="attr-flex">
+      <div class="attr-col">
+        <div class="section-label" id="gender-section"><h2>Gender <span class="note">性別（gender）別ユーザー数</span></h2><div class="meta" id="genderMeta">–</div></div>
+        <div class="panel" style="border-top:2px solid rgba(63,102,179,.55);"><div class="attr-list" id="genderList"><div class="empty-state"><b>読み込み中…</b>mart_user.json を取得しています</div></div></div>
+      </div>
+      <div class="attr-col">
+        <div class="section-label" id="age-section"><h2>Age Group <span class="note">年代（age_group）別ユーザー数</span></h2><div class="meta" id="ageMeta">–</div></div>
+        <div class="panel" style="border-top:2px solid rgba(63,102,179,.55);"><div class="attr-list" id="ageList"><div class="empty-state"><b>読み込み中…</b>mart_user.json を取得しています</div></div></div>
+      </div>
+    </div>
+    <div class="footer-note">データソース: <code>mart_user.json</code> ・ 集計軸: <code>gender</code> / <code>age_group</code> ・ 指標: <code>COUNT(account_id)</code>（del_flg = false のみ集計）</div>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+<script>
+const DATA_SOURCES=["json/mart_user.json","mart_user.json"];
+const ATTR="#3f66b3";   // 会員属性系テーマカラー
+const el=id=>document.getElementById(id);
+const setText=(id,v)=>{const e=el(id); if(e) e.textContent=v;};
+const esc=t=>String(t??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let ROWS=[], DATES=[], chart, sliderBuilt=false;
+const state={dmin:0,dmax:0};   // 日付インデックス範囲（デフォルト＝全期間）
+const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(s||"");
+const dateOnly=s=>(s||"").slice(0,10);
+async function loadData(){let last;for(const src of DATA_SOURCES){try{const r=await fetch(src);if(!r.ok)throw new Error(r.status);return await r.json()}catch(e){last=e}}throw last}
+function uniqueUsers(rows){return new Set(rows.map(r=>r.account_id).filter(Boolean)).size}
+function ageSortKey(name){const m=/^(\d+)/.exec(name);return m?parseInt(m[1],10):9999}
+function render(){
+ const start=DATES[state.dmin]||"", end=DATES[state.dmax]||"";
+ const active=ROWS.filter(r=>!r.del_flg);
+ const filtered=active.filter(r=>{const d=dateOnly(r.created_at);return validDate(d)&&(!start||d>=start)&&(!end||d<=end)});
+ const byDate=new Map();filtered.forEach(r=>{const d=dateOnly(r.created_at);if(!validDate(d))return;if(!byDate.has(d))byDate.set(d,new Set());if(r.account_id)byDate.get(d).add(r.account_id)});const dates=[...byDate.keys()].sort();const vals=dates.map(d=>byDate.get(d).size);
+ const byGender=new Map();filtered.forEach(r=>{const key=(r.gender||"").trim()||"未回答";if(!byGender.has(key))byGender.set(key,new Set());if(r.account_id)byGender.get(key).add(r.account_id)});const genders=[...byGender].map(([name,set])=>({name,count:set.size})).sort((a,b)=>b.count-a.count);
+ const byAge=new Map();filtered.forEach(r=>{let key=(r.age_group||"").trim()||"未回答";if(ageSortKey(key)>=100)key="未回答";if(!byAge.has(key))byAge.set(key,{users:new Set()});if(r.account_id)byAge.get(key).users.add(r.account_id)});const ages=[...byAge].map(([name,v])=>({name,count:v.users.size})).sort((a,b)=>ageSortKey(a.name)-ageSortKey(b.name));
+ const opsCount=new Set(filtered.filter(r=>r.is_operation_member).map(r=>r.account_id)).size;
+ setText("kUsers",uniqueUsers(filtered).toLocaleString("ja-JP"));setText("kDays",dates.length.toLocaleString("ja-JP"));setText("kOps",opsCount.toLocaleString("ja-JP"));setText("filterMeta",`${filtered.length.toLocaleString("ja-JP")} レコード`);setText("genderMeta",`${genders.length} カテゴリ`);setText("ageMeta",`${ages.length} カテゴリ`);
+ if(chart)chart.destroy();chart=new Chart(el("dailyChart"),{type:"line",data:{labels:dates,datasets:[{label:"新規登録ユーザー",data:vals,borderColor:ATTR,backgroundColor:"rgba(63,102,179,.10)",fill:true,tension:.25,pointRadius:3,pointHoverRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.parsed.y.toLocaleString("ja-JP")}人`}}},scales:{y:{beginAtZero:true,ticks:{precision:0}},x:{grid:{display:false}}}}});
+ const gmax=genders.length?Math.max(...genders.map(g=>g.count)):1;el("genderList").innerHTML=genders.length?genders.map(g=>`<div class="attr-row"><div class="attr-name"><b>${esc(g.name)}</b></div><div class="bar-track"><div class="bar" style="width:${(g.count/gmax*100).toFixed(1)}%"></div></div><div class="attr-value">${g.count.toLocaleString("ja-JP")} 人</div></div>`).join(""):'<div class="empty-state"><b>該当データがありません</b>期間条件を変更してください</div>';
+ const amax=ages.length?Math.max(...ages.map(a=>a.count)):1;el("ageList").innerHTML=ages.length?ages.map(a=>`<div class="attr-row"><div class="attr-name"><b>${esc(a.name)}</b></div><div class="bar-track"><div class="bar" style="width:${(a.count/amax*100).toFixed(1)}%"></div></div><div class="attr-value">${a.count.toLocaleString("ja-JP")} 人</div></div>`).join(""):'<div class="empty-state"><b>該当データがありません</b>期間条件を変更してください</div>';
+}
+function buildSlider(){
+ const slider=el("dateSlider"), readout=el("timeReadout");
+ const maxIdx=Math.max(DATES.length-1,0);
+ noUiSlider.create(slider,{start:[0,maxIdx],connect:true,step:1,range:{min:0,max:maxIdx||1},format:{to:v=>Math.round(v),from:v=>Math.round(v)}});
+ slider.noUiSlider.on("update",vals=>{state.dmin=+vals[0];state.dmax=+vals[1];readout.innerHTML=`対象期間 <b>${esc(DATES[state.dmin]||"–")}</b> 〜 <b>${esc(DATES[state.dmax]||"–")}</b>`;});
+ slider.noUiSlider.on("change",()=>render());
+ sliderBuilt=true;
+}
+(async()=>{try{const d=await loadData();ROWS=(d.records||[]);const latest=ROWS.map(r=>r.created_at).filter(Boolean).sort().pop();setText("metaUpdated2",latest||"–");DATES=[...new Set(ROWS.map(r=>dateOnly(r.created_at)).filter(validDate))].sort();state.dmin=0;state.dmax=Math.max(DATES.length-1,0);buildSlider();render()}catch(e){el("genderList").innerHTML='<div class="empty-state"><b>データを読み込めませんでした</b>json/mart_user.json または mart_user.json の配置を確認してください</div>';el("ageList").innerHTML="";console.error(e)}})();
+el("resetBtn").addEventListener("click",()=>{if(sliderBuilt)el("dateSlider").noUiSlider.set([0,Math.max(DATES.length-1,0)]);render()});
+</script></body></html>
