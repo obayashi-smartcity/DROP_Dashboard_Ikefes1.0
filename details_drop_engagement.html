@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>投稿エンゲージメント — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <!-- noUiSlider -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css" />
+  <!-- 共通デザインシステム（編集禁止） -->
+  <link rel="stylesheet" href="dashboard-common.css" />
+  <!-- ===================== ページ固有スタイル =====================
+       投稿エンゲージメント＝紫（--rich）テーマ（行動・エンゲージメント系）
+       いいね／PV ランキングとも紫（主役）＋グレー（中立）で統一。
+  ============================================================== -->
+  <style>
+    /* ---- シックな文字ベース ナビ ---- */
+    .sidebar { --accent: var(--rich); }
+    .switch-group { gap: 1px; }
+    .switch-group .cap { margin: 10px 8px 10px; }
+    a.switch-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 10px 9px 12px;
+      border: none; background: transparent; border-radius: 0;
+      border-left: 2px solid transparent;
+      color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .2px;
+      transition: color .15s, border-color .15s;
+    }
+    a.switch-item:hover { background: transparent; color: var(--text); border-left-color: var(--stroke); }
+    a.switch-item.active { background: transparent; color: var(--text); font-weight: 700; border-left-color: var(--accent); }
+    a.switch-item .mi { width: 17px; height: 17px; flex: none; color: var(--dim); display: inline-flex; align-items: center; justify-content: center; transition: color .15s; }
+    a.switch-item:hover .mi { color: var(--muted); }
+    a.switch-item.active .mi { color: var(--accent); }
+    .switch-item .mi svg { width: 100%; height: 100%; display: block; }
+
+    /* ---- サイドバー内フィルタ ---- */
+    .sidebar-filter { display:flex; flex-direction:column; gap:14px; }
+    .sidebar-filter .filter-bar { display:flex; flex-direction:column; gap:14px; }
+    .filter-group .f-title { font-size:11px; letter-spacing:1.2px; text-transform:uppercase; color:var(--dim); font-weight:700; margin:0 0 7px; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .chip-btn { border:1px solid var(--stroke); background:var(--bg); color:var(--muted); font-family:var(--font); font-size:11px; padding:5px 9px; border-radius:0; cursor:pointer; transition:.15s; line-height:1.3; white-space:nowrap; user-select:none; }
+    .chip-btn:hover { color:var(--text); background:#fff; }
+    .chip-btn.on { background:var(--rich-soft); color:var(--rich); font-weight:700; border-color:var(--rich); }
+    .time-readout { font-size:11px; color:var(--text); font-variant-numeric:tabular-nums; margin-bottom:6px; }
+    .time-readout b { color:var(--rich); }
+    .sidebar-filter .slider-wrap { min-width:0; padding:8px 6px 2px 0; }
+    .sidebar-filter .noUi-connect { background: linear-gradient(90deg, #a98cd0, var(--rich)); }
+    .sidebar-filter .noUi-horizontal .noUi-handle { border-color: var(--rich); }
+    .filter-foot { display:flex; flex-direction:column; align-items:stretch; gap:8px; margin-top:2px; }
+    .filter-foot .f-count { font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .filter-foot .f-count b { color:var(--rich); font-weight:800; }
+    .reset-btn { width:100%; border:1px solid var(--stroke); background:#fff; color:var(--muted); font:12px var(--font); padding:8px 10px; cursor:pointer; border-radius:0; transition:.15s; }
+    .reset-btn:hover { color:var(--text); background:var(--bg); border-color:var(--rich); }
+
+    /* ---- ランキング ---- */
+    .rank-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--gap); align-items:start; }
+    .rank-col { min-width:0; }
+    .rank-list { display:flex; flex-direction:column; gap:2px; }
+    .rank-row {
+      display:grid; grid-template-columns:34px 52px 1fr auto; align-items:center; gap:12px;
+      padding:10px 6px; border-bottom:1px solid var(--stroke-soft); cursor:pointer; transition:.12s;
+    }
+    .rank-row:hover { background:var(--bg); }
+    .rank-no { font-family:var(--font-display); font-weight:900; font-size:18px; text-align:center; color:var(--dim); font-variant-numeric:tabular-nums; }
+    .rank-row.top .rank-no { color:var(--rich); }
+    .rank-thumb { width:52px; height:52px; object-fit:cover; background:var(--bg-b); display:block; }
+    .rank-main { min-width:0; }
+    .rank-name { font-size:13px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rank-sen { font-size:11.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:2px 0 6px; }
+    .rank-bar-track { height:8px; background:var(--bg-b); width:100%; }
+    .rank-bar { height:100%; background:var(--rich); min-width:1px; }
+    .rank-row:not(.top) .rank-bar { background:#a98cd0; }
+    .rank-val { display:flex; flex-direction:column; align-items:flex-end; white-space:nowrap; min-width:64px; }
+    .rank-val b { font-size:20px; font-weight:800; color:var(--rich); font-variant-numeric:tabular-nums; line-height:1.1; }
+    .rank-val span { font-size:10.5px; color:var(--dim); font-variant-numeric:tabular-nums; }
+    .more-wrap { text-align:center; margin-top:16px; }
+    .more-btn { border:1px solid var(--stroke); background:#fff; color:var(--muted); font-family:var(--font); font-size:12.5px; padding:9px 24px; cursor:pointer; border-radius:0; transition:.15s; }
+    .more-btn:hover { color:var(--text); background:var(--bg); border-color:var(--rich); }
+
+    .badges { display:flex; gap:5px; flex-wrap:wrap; }
+    .badge { font-size:10px; padding:2px 7px; border-radius:0; font-weight:700; letter-spacing:.3px; line-height:1.4; border:1px solid transparent; }
+    .badge.gender { background:var(--rich-soft); color:var(--rich); }
+    .badge.age { background:var(--bg); color:var(--muted); border-color:var(--stroke); }
+    .modal-metrics { display:flex; gap:22px; margin-top:16px; }
+    .modal-metrics div { font-size:11px; color:var(--dim); letter-spacing:.4px; }
+    .modal-metrics b { display:block; font-size:26px; font-weight:800; color:var(--rich); font-variant-numeric:tabular-nums; letter-spacing:-.3px; }
+
+    @media (max-width:1080px) { .rank-grid { grid-template-columns:1fr; } }
+    @media (max-width:430px) { .rank-row { grid-template-columns:28px 44px 1fr auto; gap:8px; } .rank-thumb { width:44px; height:44px; } .rank-val b { font-size:17px; } }
+  </style>
+</head>
+<body class="page-fade">
+<div class="app">
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="brand"><div style="font-family:var(--font-display);font-weight:900;font-size:22px;letter-spacing:-.5px;line-height:1.1;">DROP<span style="color:var(--rich);">.</span><br><span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;">TRACKER</span></div></div>
+    <nav class="nav-group switch-group">
+      <div class="cap">Dashboards</div>
+      <a class="switch-item" href="index.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v6M10 8v11M15 4v15M20 11v8"/></svg></span>Summary</a>
+      <a class="switch-item" href="details_inflow.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5L12 12l3.5-3.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>流入分析</a>
+      <a class="switch-item" href="details_user.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/></svg></span>アカウント登録</a>
+      <a class="switch-item" href="details_drop.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5L3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5l-6-2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></span>投稿</a>
+      <a class="switch-item active" href="details_drop_engagement.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>エンゲージメント</a>
+    </nav>
+    <div class="nav-group sidebar-filter">
+      <div class="panel-head"><h3>フィルタ</h3><span class="sub">性別・年齢・投稿日で絞り込み</span></div>
+      <div class="filter-bar">
+        <div class="filter-group"><div class="f-title">性別</div><div class="chips" id="genderChips"></div></div>
+        <div class="filter-group"><div class="f-title">年齢層</div><div class="chips" id="ageChips"></div></div>
+        <div class="filter-group">
+          <div class="f-title">投稿日</div>
+          <div class="time-readout" id="timeReadout">–</div>
+          <div class="slider-wrap"><div id="dateSlider"></div></div>
+        </div>
+      </div>
+      <div class="filter-foot">
+        <div class="f-count" id="filterCount">–</div>
+        <button class="reset-btn" id="resetBtn">条件をリセット</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <main class="main">
+    <div class="topbar"><div><h1>Post Engagement</h1><p>投稿ごとのいいね数・PV数ランキング</p></div><div class="status"><span class="pulse"></span> latest timestamp: <b>&nbsp;<span id="metaUpdated2">–</span></b></div></div>
+    <div class="switch-mobile"><a class="chip" href="index.html">Summary</a><a class="chip" href="details_inflow.html">流入分析</a><a class="chip" href="details_user.html">アカウント登録</a><a class="chip" href="details_drop.html">投稿</a><a class="chip chip-active" href="details_drop_engagement.html">エンゲージメント</a></div>
+
+    <div class="kpis">
+      <div class="kpi rich"><div class="k-label">総いいね数</div><div class="k-val" id="kLikes">–</div><div class="k-cap">SUM(like_count)</div></div>
+      <div class="kpi rich"><div class="k-label">総PV数</div><div class="k-val" id="kPv">–</div><div class="k-cap">SUM(pv_count)</div></div>
+      <div class="kpi gray"><div class="k-label">対象投稿数</div><div class="k-val" id="kPosts">–</div><div class="k-cap">フィルタ適用後</div></div>
+      <div class="kpi gray"><div class="k-label">いいね率</div><div class="k-val" id="kRate">–</div><div class="k-cap">総いいね ÷ 総PV</div></div>
+    </div>
+
+    <div class="rank-grid">
+      <div class="rank-col">
+        <div class="section-label" id="like-section"><h2>Like Ranking <span class="note">いいねランキング</span></h2><div class="meta" id="likeMeta">–</div></div>
+        <div class="panel" style="border-top:2px solid rgba(122,88,176,.55);">
+          <div class="rank-list" id="likeList"><div class="empty-state"><b>読み込み中…</b>mart_action_drop_engagement.json を取得しています</div></div>
+          <div class="more-wrap" id="likeMore"></div>
+        </div>
+      </div>
+      <div class="rank-col">
+        <div class="section-label" id="pv-section"><h2>PV Ranking <span class="note">PVランキング</span></h2><div class="meta" id="pvMeta">–</div></div>
+        <div class="panel" style="border-top:2px solid rgba(122,88,176,.55);">
+          <div class="rank-list" id="pvList"><div class="empty-state"><b>読み込み中…</b>mart_action_drop_engagement.json を取得しています</div></div>
+          <div class="more-wrap" id="pvMore"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">データソース: <code>mart_action_drop_engagement.json</code> ・ 指標: <code>like_count</code> / <code>pv_count</code> ・ 同数は同順位（タイブレーク表示順：もう一方の指標 → 投稿日時の新しい順）</div>
+  </main>
+</div>
+
+<!-- ============ 投稿詳細モーダル（dashboard-common.css の .post-modal を使用） ============ -->
+<div id="postModal" class="post-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modalUser">
+  <div class="post-modal-inner" role="document">
+    <button id="modalClose" class="post-modal-close" type="button" aria-label="投稿詳細を閉じる">&times;</button>
+    <div class="post-modal-media">
+      <img id="modalImg" class="post-modal-img" alt="投稿画像">
+      <div id="modalNoImage" class="post-modal-no-image">画像はありません</div>
+    </div>
+    <div class="post-modal-body">
+      <div id="modalUser" class="post-modal-user"></div>
+      <div id="modalBadges" class="badges"></div>
+      <div class="modal-metrics"><div>いいね<b id="modalLikes">–</b></div><div>PV<b id="modalPv">–</b></div></div>
+      <div id="modalTime" class="post-modal-time"></div>
+      <div id="modalText" class="post-modal-text"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+<script>
+const DATA_SOURCES = ["json/mart_action_drop_engagement.json", "mart_action_drop_engagement.json"];
+const PAGE_SIZE = 10;
+const GENDER_ORDER = ["男性", "女性", "無回答", ""];
+const genderLabel = g => (g && g.trim() ? g : "未設定");
+const ageLabel = a => (a && a.trim() ? a : "未設定");
+const ageKey = a => { const m = /^(\d+)/.exec(a || ""); return m ? parseInt(m[1], 10) : 9999; };
+
+const el = id => document.getElementById(id);
+const setText = (id, v) => { const e = el(id); if (e) e.textContent = v; };
+const fmt = n => Number(n).toLocaleString("ja-JP");
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let POSTS = [], DATES = [], sliderBuilt = false;
+const state = { genders: new Set(), ages: new Set(), dmin: 0, dmax: 0, likeLimit: PAGE_SIZE, pvLimit: PAGE_SIZE };
+
+async function loadData() { let last; for (const s of DATA_SOURCES) { try { const r = await fetch(s); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); } catch (e) { last = e; } } throw last; }
+
+function normalize(records) {
+  return records.map(r => ({
+    id: r.artwork_id, n: r.account_name || "", s: (r.sentence || "").trim(),
+    g: r.gender || "", a: r.age_group || "", t: r.post_dated_at || "",
+    date: r.post_date || (r.post_dated_at || "").slice(0, 10),
+    thumb: r.image_file_path_thumbnail || "", img: r.image_file_path || r.image_file_path_thumbnail || "",
+    like: Number(r.like_count) || 0, pv: Number(r.pv_count) || 0
+  }));
+}
+
+function pass(p) {
+  if (!state.genders.has(p.g)) return false;
+  if (!state.ages.has(p.a)) return false;
+  const di = DATES.indexOf(p.date);
+  if (di >= 0 && (di < state.dmin || di > state.dmax)) return false;
+  return true;
+}
+
+/* 指標で降順ソートし、同数は同順位（1,1,3…）を付与 */
+function rankBy(list, key, sub) {
+  const sorted = [...list].sort((a, b) => b[key] - a[key] || b[sub] - a[sub] || (b.t > a.t ? 1 : b.t < a.t ? -1 : 0));
+  let prev = null, rank = 0;
+  return sorted.map((p, i) => { if (p[key] !== prev) { rank = i + 1; prev = p[key]; } return { ...p, rank }; });
+}
+
+function renderRanking(listId, moreId, metaId, ranked, key, unit, subKey, subLabel, limitKey) {
+  const shown = ranked.slice(0, state[limitKey]);
+  setText(metaId, `${ranked.length} 投稿中 上位 ${shown.length} 件`);
+  if (!ranked.length) {
+    el(listId).innerHTML = '<div class="empty-state"><b>該当する投稿がありません</b>フィルタ条件を変更してください</div>';
+    el(moreId).innerHTML = ""; return;
+  }
+  const max = Math.max(ranked[0][key], 1);
+  el(listId).innerHTML = shown.map(p => {
+    const w = p[key] > 0 ? Math.max(3, Math.round(p[key] / max * 100)) : 0;
+    const thumb = p.thumb ? `<img class="rank-thumb" src="${esc(p.thumb)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<div class="rank-thumb"></div>';
+    return `<div class="rank-row${p.rank <= 3 && p[key] > 0 ? " top" : ""}" data-id="${esc(p.id)}">
+      <div class="rank-no">${p.rank}</div>
+      ${thumb}
+      <div class="rank-main">
+        <div class="rank-name" title="${esc(p.n)}">${esc(p.n || "投稿者名なし")}</div>
+        <div class="rank-sen" title="${esc(p.s)}">${esc(p.s.replace(/\s+/g, " "))}</div>
+        <div class="rank-bar-track"><div class="rank-bar" style="width:${w}%"></div></div>
+      </div>
+      <div class="rank-val"><b>${fmt(p[key])}</b><span>${unit} ／ ${subLabel} ${fmt(p[subKey])}</span></div>
+    </div>`;
+  }).join("");
+  el(listId).querySelectorAll(".rank-row").forEach(row => row.addEventListener("click", () => {
+    const p = POSTS.find(x => x.id === row.getAttribute("data-id")); if (p) openPostModal(p);
+  }));
+  el(moreId).innerHTML = shown.length < ranked.length ? `<button class="more-btn">さらに表示（残り ${ranked.length - shown.length} 件）</button>` : "";
+  const mb = el(moreId).querySelector("button");
+  if (mb) mb.addEventListener("click", () => { state[limitKey] += PAGE_SIZE; render(); });
+}
+
+function render() {
+  const filtered = POSTS.filter(pass);
+  const likes = filtered.reduce((s, p) => s + p.like, 0);
+  const pv = filtered.reduce((s, p) => s + p.pv, 0);
+  setText("kLikes", fmt(likes));
+  setText("kPv", fmt(pv));
+  setText("kPosts", fmt(filtered.length));
+  setText("kRate", pv > 0 ? (likes / pv * 100).toFixed(1) + "%" : "–");
+  el("filterCount").innerHTML = `絞り込み結果 <b>${filtered.length}</b> 件 / 全 ${POSTS.length} 件`;
+  renderRanking("likeList", "likeMore", "likeMeta", rankBy(filtered, "like", "pv"), "like", "いいね", "pv", "PV", "likeLimit");
+  renderRanking("pvList", "pvMore", "pvMeta", rankBy(filtered, "pv", "like"), "pv", "PV", "like", "いいね", "pvLimit");
+}
+
+/* ---- モーダル ---- */
+function openPostModal(p) {
+  const img = el("modalImg"), noImg = el("modalNoImage");
+  if (p.img) { img.src = p.img; img.hidden = false; noImg.hidden = true; } else { img.removeAttribute("src"); img.hidden = true; noImg.hidden = false; }
+  setText("modalUser", p.n || "投稿者名なし");
+  setText("modalTime", p.t);
+  setText("modalText", p.s);
+  setText("modalLikes", fmt(p.like));
+  setText("modalPv", fmt(p.pv));
+  el("modalBadges").innerHTML = `<span class="badge gender">${esc(genderLabel(p.g))}</span><span class="badge age">${esc(ageLabel(p.a))}</span>`;
+  el("postModal").classList.add("show"); el("postModal").setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open"); el("modalClose").focus();
+}
+function closePostModal() { el("postModal").classList.remove("show"); el("postModal").setAttribute("aria-hidden", "true"); document.body.classList.remove("modal-open"); }
+el("modalClose").addEventListener("click", closePostModal);
+el("postModal").addEventListener("click", e => { if (e.target === el("postModal")) closePostModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && el("postModal").classList.contains("show")) closePostModal(); });
+el("modalImg").addEventListener("error", () => { el("modalImg").hidden = true; el("modalNoImage").hidden = false; });
+
+/* ---- フィルタ ---- */
+function buildChips() {
+  const genders = [...new Set(POSTS.map(p => p.g))].sort((a, b) => { const ia = GENDER_ORDER.indexOf(a), ib = GENDER_ORDER.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+  const ages = [...new Set(POSTS.map(p => p.a))].sort((a, b) => ageKey(a) - ageKey(b));
+  const chip = (type, val, label, n) => `<button class="chip-btn on" data-type="${type}" data-val="${esc(val)}">${esc(label)} <span style="opacity:.6">${n}</span></button>`;
+  genders.forEach(g => state.genders.add(g)); ages.forEach(a => state.ages.add(a));
+  el("genderChips").innerHTML = genders.map(g => chip("g", g, genderLabel(g), POSTS.filter(p => p.g === g).length)).join("");
+  el("ageChips").innerHTML = ages.map(a => chip("a", a, ageLabel(a), POSTS.filter(p => p.a === a).length)).join("");
+  document.querySelectorAll(".chip-btn[data-type]").forEach(btn => btn.addEventListener("click", () => {
+    const set = btn.dataset.type === "g" ? state.genders : state.ages, val = btn.dataset.val;
+    if (set.has(val)) { set.delete(val); btn.classList.remove("on"); } else { set.add(val); btn.classList.add("on"); }
+    state.likeLimit = state.pvLimit = PAGE_SIZE; render();
+  }));
+}
+function buildSlider() {
+  const slider = el("dateSlider"), maxIdx = Math.max(DATES.length - 1, 0);
+  noUiSlider.create(slider, { start: [0, maxIdx], connect: true, step: 1, range: { min: 0, max: maxIdx || 1 }, format: { to: v => Math.round(v), from: v => Math.round(v) } });
+  slider.noUiSlider.on("update", v => { state.dmin = +v[0]; state.dmax = +v[1]; el("timeReadout").innerHTML = `投稿日 <b>${esc(DATES[state.dmin] || "–")}</b> 〜 <b>${esc(DATES[state.dmax] || "–")}</b>`; });
+  slider.noUiSlider.on("change", () => { state.likeLimit = state.pvLimit = PAGE_SIZE; render(); });
+  sliderBuilt = true;
+}
+el("resetBtn").addEventListener("click", () => {
+  state.genders.clear(); state.ages.clear();
+  document.querySelectorAll(".chip-btn[data-type]").forEach(b => { b.classList.add("on"); (b.dataset.type === "g" ? state.genders : state.ages).add(b.dataset.val); });
+  if (sliderBuilt) el("dateSlider").noUiSlider.set([0, Math.max(DATES.length - 1, 0)]);
+  state.dmin = 0; state.dmax = Math.max(DATES.length - 1, 0); state.likeLimit = state.pvLimit = PAGE_SIZE;
+  render();
+});
+
+/* ---- 起動 ---- */
+(async () => {
+  try {
+    const json = await loadData();
+    const records = json.records || [];
+    POSTS = normalize(records);
+    DATES = [...new Set(POSTS.map(p => p.date).filter(Boolean))].sort();
+    state.dmin = 0; state.dmax = Math.max(DATES.length - 1, 0);
+    setText("metaUpdated2", records.map(r => r.post_dated_at).filter(Boolean).sort().pop() || "–");
+    buildChips(); buildSlider(); render();
+  } catch (err) {
+    const msg = '<div class="empty-state"><b>データを読み込めませんでした</b>json/mart_action_drop_engagement.json または mart_action_drop_engagement.json の配置を確認してください（file:// では fetch できません）</div>';
+    el("likeList").innerHTML = msg; el("pvList").innerHTML = msg; console.error(err);
+  }
+})();
+</script>
+</body>
+</html>

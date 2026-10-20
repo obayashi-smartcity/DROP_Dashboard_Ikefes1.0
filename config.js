@@ -36,7 +36,7 @@ const DASHBOARD_CONFIG = {
   },
 
   /* ---- 地図（CARTO ベースマップ）設定 ----
-   *   スタンプマップ / 投稿マップ（details_stamp.html・details_drop.html）で共通利用。
+   *   投稿マップ（details_drop.html）で利用。
    *   API キーを差し替える場合は、この cartoApiKey のみを編集してください
    *   （各 HTML 本体の編集は不要です）。
    */
