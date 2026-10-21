@@ -277,9 +277,8 @@
       attribution: MAP_CFG.attribution
     },
     genderLabel: (g) => (g && g.trim() !== "" ? g : "施設・運営"),
-    ageOrder: ["0代","10代","20代", "30代", "40代", "50代", "60代", "70代", "80代", "90代"],
     ageLabel: (a) => (a && a.trim() !== "" ? a : "未設定"),
-    genderOrder: ["男性", "女性", "無回答", ""],
+    // ※ 性別・年齢層の選択肢はプリセットせず、JSON（records）に含まれる値から動的に生成する
     pageSize: 24
   };
 
@@ -465,21 +464,32 @@ function render() {
     if (card) { card.classList.add("hl"); }
   }
 
-  function buildChips() {
-    // デフォルトは全選択（存在する値をすべて state に追加し .on 表示）
-    el("genderChips").innerHTML = CONFIG.genderOrder.map(g => {
-      const n = POSTS.filter(p => p.g === g).length;
-      if (!n) return "";
-      state.genders.add(g);
-      return `<button class="chip-btn on" data-type="g" data-val="${esc(g)}">${esc(CONFIG.genderLabel(g))} <span style="opacity:.6">${n}</span></button>`;
-    }).join("");
+  /* ---- フィルタ選択肢を JSON の値から生成（プリセットなし） ----
+   *   値ごとの件数を集計し、並び順もデータから決定する
+   *   - 性別：件数の多い順（空値＝施設・運営は末尾）
+   *   - 年齢層：先頭の数値順（数値を含まない値・空値は末尾）
+   */
+  const numKey = (v) => { const m = /(\d+)/.exec(v || ""); return m ? parseInt(m[1], 10) : Infinity; };
+  function countBy(key) {
+    const m = new Map();
+    POSTS.forEach(p => m.set(p[key], (m.get(p[key]) || 0) + 1));
+    return [...m].map(([val, n]) => ({ val, n }));
+  }
+  function genderOptions() {
+    return countBy("g").sort((a, b) => (a.val === "") - (b.val === "") || b.n - a.n || a.val.localeCompare(b.val, "ja"));
+  }
+  function ageOptions() {
+    return countBy("a").sort((a, b) => (a.val === "") - (b.val === "") || numKey(a.val) - numKey(b.val) || a.val.localeCompare(b.val, "ja"));
+  }
 
-    el("ageChips").innerHTML = CONFIG.ageOrder.map(a => {
-      const n = POSTS.filter(p => p.a === a).length;
-      if (!n) return "";
-      state.ages.add(a);
-      return `<button class="chip-btn on" data-type="a" data-val="${esc(a)}">${esc(CONFIG.ageLabel(a))} <span style="opacity:.6">${n}</span></button>`;
-    }).join("");
+  function buildChips() {
+    // デフォルトは全選択（JSON に存在する値をすべて state に追加し .on 表示）
+    const chip = (type, val, label, n) => `<button class="chip-btn on" data-type="${type}" data-val="${esc(val)}">${esc(label)} <span style="opacity:.6">${n}</span></button>`;
+    const genders = genderOptions(), ages = ageOptions();
+    genders.forEach(o => state.genders.add(o.val));
+    ages.forEach(o => state.ages.add(o.val));
+    el("genderChips").innerHTML = genders.map(o => chip("g", o.val, CONFIG.genderLabel(o.val), o.n)).join("");
+    el("ageChips").innerHTML = ages.map(o => chip("a", o.val, CONFIG.ageLabel(o.val), o.n)).join("");
 
     document.querySelectorAll(".chip-btn[data-type]").forEach(btn => {
       btn.addEventListener("click", () => {

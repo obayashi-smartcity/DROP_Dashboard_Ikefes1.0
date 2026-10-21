@@ -317,10 +317,9 @@
 <script>
 const DATA_SOURCES = ["json/mart_action_drop_engagement.json", "mart_action_drop_engagement.json"];
 const PAGE_SIZE = 10;
-const GENDER_ORDER = ["男性", "女性", "無回答", ""];
 const genderLabel = g => (g && g.trim() ? g : "未設定");
 const ageLabel = a => (a && a.trim() ? a : "未設定");
-const ageKey = a => { const m = /^(\d+)/.exec(a || ""); return m ? parseInt(m[1], 10) : 9999; };
+const ageKey = a => { const m = /(\d+)/.exec(a || ""); return m ? parseInt(m[1], 10) : Infinity; };
 
 const el = id => document.getElementById(id);
 const setText = (id, v) => { const e = el(id); if (e) e.textContent = v; };
@@ -423,12 +422,16 @@ el("modalImg").addEventListener("error", () => { el("modalImg").hidden = true; e
 
 /* ---- フィルタ ---- */
 function buildChips() {
-  const genders = [...new Set(POSTS.map(p => p.g))].sort((a, b) => { const ia = GENDER_ORDER.indexOf(a), ib = GENDER_ORDER.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-  const ages = [...new Set(POSTS.map(p => p.a))].sort((a, b) => ageKey(a) - ageKey(b));
+  // 選択肢はプリセットせず、JSON（records）に含まれる値から生成
+  //   性別：件数の多い順（空値＝未設定は末尾）／年齢層：先頭の数値順（空値は末尾）
+  const cnt = key => POSTS.reduce((m, p) => m.set(p[key], (m.get(p[key]) || 0) + 1), new Map());
+  const gCnt = cnt("g"), aCnt = cnt("a");
+  const genders = [...gCnt.keys()].sort((a, b) => (a === "") - (b === "") || gCnt.get(b) - gCnt.get(a) || a.localeCompare(b, "ja"));
+  const ages = [...aCnt.keys()].sort((a, b) => (a === "") - (b === "") || ageKey(a) - ageKey(b) || a.localeCompare(b, "ja"));
   const chip = (type, val, label, n) => `<button class="chip-btn on" data-type="${type}" data-val="${esc(val)}">${esc(label)} <span style="opacity:.6">${n}</span></button>`;
   genders.forEach(g => state.genders.add(g)); ages.forEach(a => state.ages.add(a));
-  el("genderChips").innerHTML = genders.map(g => chip("g", g, genderLabel(g), POSTS.filter(p => p.g === g).length)).join("");
-  el("ageChips").innerHTML = ages.map(a => chip("a", a, ageLabel(a), POSTS.filter(p => p.a === a).length)).join("");
+  el("genderChips").innerHTML = genders.map(g => chip("g", g, genderLabel(g), gCnt.get(g))).join("");
+  el("ageChips").innerHTML = ages.map(a => chip("a", a, ageLabel(a), aCnt.get(a))).join("");
   document.querySelectorAll(".chip-btn[data-type]").forEach(btn => btn.addEventListener("click", () => {
     const set = btn.dataset.type === "g" ? state.genders : state.ages, val = btn.dataset.val;
     if (set.has(val)) { set.delete(val); btn.classList.remove("on"); } else { set.add(val); btn.classList.add("on"); }
