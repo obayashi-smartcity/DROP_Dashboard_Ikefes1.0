@@ -127,7 +127,10 @@
     .ai-run-note { font-size:11.5px; color:var(--dim); }
     .ai-login { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:14px; padding:12px; background:var(--bg); border:1px solid var(--stroke-soft); }
     .ai-login label { font-size:12px; color:var(--muted); font-weight:700; }
-    .ai-login input { border:1px solid var(--stroke); background:#fff; font:13px var(--font); padding:8px 10px; border-radius:0; min-width:200px; }
+    .ai-login input { border:1px solid var(--stroke); background:#fff; font:13px var(--font); padding:8px 10px; border-radius:0; min-width:160px; }
+    .ai-user { font-size:11.5px; color:var(--muted); }
+    .ai-user b { color:var(--rich); }
+    .ai-status .warn { color:#9a6b00; font-weight:400; }
     .ai-login input:focus { outline:2px solid var(--rich-soft); border-color:var(--rich); }
     .ai-err { font-size:12px; color:#c0392b; font-weight:700; }
     .ai-status { margin-top:14px; font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:10px; }
@@ -230,12 +233,14 @@
         <div class="ai-desc">現在のフィルタ条件で、いいね上位・PV上位 各 <b id="aiTopN">–</b> 件を AI に送って分析します。条件を決めてから「分析を実行」を押してください。</div>
         <div class="ai-actions">
           <button type="button" class="ai-link" id="aiForceBtn" hidden title="キャッシュを使わずに再生成します">再生成</button>
+          <span class="ai-user" id="aiUser" hidden></span>
           <button type="button" class="ai-link" id="aiLogoutBtn" hidden>ログアウト</button>
         </div>
       </div>
 
       <form class="ai-login" id="aiLogin" hidden autocomplete="on">
-        <input type="text" name="username" autocomplete="username" value="drop-ai" hidden />
+        <label for="aiName">Name</label>
+        <input type="text" id="aiName" name="username" autocomplete="username" maxlength="40" placeholder="氏名・所属など" required />
         <label for="aiPw">パスワード</label>
         <input type="password" id="aiPw" autocomplete="current-password" required />
         <button type="submit" class="ai-btn" id="aiLoginBtn">認証して分析</button>
@@ -266,7 +271,7 @@
       </div>
       <div class="ai-status" id="aiStatus" hidden></div>
       <div class="ai-result" id="aiResult" hidden></div>
-      <div class="ai-note">AI による自動分析です。少ない件数では傾向が偶然に左右されるため、判断の参考としてご利用ください。送信するのは上位投稿の本文（一部）・いいね数・PV数・投稿日時・性別・年代と、入力した指示・制約条件のみで、アカウント ID は送信しません。</div>
+      <div class="ai-note">AI による自動分析です。少ない件数では傾向が偶然に左右されるため、判断の参考としてご利用ください。送信するのは上位投稿の本文（一部）・いいね数・PV数・投稿日時・性別・年代と、入力した指示・制約条件のみで、アカウント ID は送信しません。実行のたびに Name・追加指示・制約条件を記録します。</div>
     </div>
 
     <div class="rank-grid">
@@ -449,7 +454,9 @@ el("resetBtn").addEventListener("click", () => {
 /* =====================================================================
    AI 分析（Google Apps Script → OpenAI API）
    - GAS_URL: GAS ウェブアプリの /exec URL
-   - パスワードは保存しない。認証後に GAS が発行するトークンを localStorage に保持
+   - 分析用 GAS（GAS_URL）とログ記録用 GAS（LOG_URL）をフロントから個別に呼ぶ（GAS 同士は通信しない）
+   - ログイン時に同じ Name・パスワードで両方に認証し、それぞれが発行したトークンを localStorage に保持
+   - パスワードは保存しない。Name のみ localStorage に保存し、次回フォームに初期表示
      （GAS 側の有効期限＝最長 6 時間。期限切れ時は再入力を求める）
    - プロンプトは GAS が外部ファイルから読み込む（HTML 側では変更しない）
    - 分析は自動実行しない。「分析を実行」ボタン押下時のみ GAS を呼ぶ
@@ -462,7 +469,10 @@ const AI_CONFIG = {
   EXCLUDE: /^[\s　]*(テスト[\s　]*)+$/, // 分析から外す投稿本文（テスト投稿）
   TIMEOUT_MS: 60000,           // 通信タイムアウト（GAS 起動＋プロンプト取得＋推論で 30 秒を超えることがある）
   MAX_INSTR: 400,              // 追加指示・制約条件の文字数上限（GAS 側と合わせる）
-  TOKEN_KEY: "dropEngagementAiToken",
+  LOG_URL: "https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec", // ログ記録用 GAS（GAS_Log_Code）の /exec URL。空文字ならログを送らない
+  TOKEN_KEY: "dropEngagementAiToken",       // 分析用 GAS のトークン
+  LOG_TOKEN_KEY: "dropEngagementLogToken",  // ログ記録用 GAS のトークン
+  NAME_KEY: "dropEngagementAiName",         // 入力した Name（次回フォームに初期表示）
   PROMPT_KEY: "dropEngagementAiPrompt",
   // 制約条件のワンクリック候補（クリックで制約条件欄に追記／削除）
   PRESETS: ["追加予算をかけない", "1 か月以内に実施できる", "主催者・自治体職員だけで実施できる", "既存の告知チャネルを使う", "参加者の個人情報を新たに集めない"]
@@ -471,18 +481,27 @@ const AI_CONFIG = {
 const ai = { lastKey: null, idMap: {}, timer: null, busy: false, pendingForce: false };
 
 /* ---- トークン ---- */
-function aiGetToken() {
+function aiLogEnabled() { return !!AI_CONFIG.LOG_URL && !/X{6,}/.test(AI_CONFIG.LOG_URL); }
+function aiGetToken(key = AI_CONFIG.TOKEN_KEY) {
   try {
-    const t = JSON.parse(localStorage.getItem(AI_CONFIG.TOKEN_KEY) || "null");
+    const t = JSON.parse(localStorage.getItem(key) || "null");
     if (t && t.token && t.exp > Date.now() + 30000) return t.token;
   } catch (e) {}
-  localStorage.removeItem(AI_CONFIG.TOKEN_KEY);
+  localStorage.removeItem(key);
   return null;
 }
-function aiSetToken(token, expiresInSec) {
-  localStorage.setItem(AI_CONFIG.TOKEN_KEY, JSON.stringify({ token, exp: Date.now() + expiresInSec * 1000 }));
+function aiSetToken(token, expiresInSec, key = AI_CONFIG.TOKEN_KEY) {
+  localStorage.setItem(key, JSON.stringify({ token, exp: Date.now() + expiresInSec * 1000 }));
 }
-function aiClearToken() { localStorage.removeItem(AI_CONFIG.TOKEN_KEY); aiSyncButtons(); }
+/** 分析・ログ両方のトークンがそろっているか（ログ無効時は分析のみ） */
+function aiLoggedIn() { return !!aiGetToken() && (!aiLogEnabled() || !!aiGetToken(AI_CONFIG.LOG_TOKEN_KEY)); }
+function aiClearToken() {
+  localStorage.removeItem(AI_CONFIG.TOKEN_KEY);
+  localStorage.removeItem(AI_CONFIG.LOG_TOKEN_KEY);
+  aiSyncButtons();
+}
+function aiGetName() { try { return localStorage.getItem(AI_CONFIG.NAME_KEY) || ""; } catch (e) { return ""; } }
+function aiSetName(v) { try { localStorage.setItem(AI_CONFIG.NAME_KEY, v); } catch (e) {} }
 
 /* ---- 追加指示・制約条件 ---- */
 function aiReadPrompt() {
@@ -533,12 +552,12 @@ function aiInitPrompt() {
   el("aiOpt").addEventListener("toggle", () => { try { localStorage.setItem(AI_CONFIG.PROMPT_KEY + "Open", el("aiOpt").open ? "1" : "0"); } catch (e) {} });
 }
 
-async function aiPost(body) {
+async function aiPost(body, url = AI_CONFIG.GAS_URL) {
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), AI_CONFIG.TIMEOUT_MS);
   try {
     // text/plain で送るとプリフライトが発生せず、GAS でも CORS エラーにならない
-    const res = await fetch(AI_CONFIG.GAS_URL, {
+    const res = await fetch(url, {
       method: "POST", redirect: "follow", signal: ctrl.signal,
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(body)
@@ -609,20 +628,24 @@ function aiSyncButtons() {
   el("aiRunBtn").textContent = ai.busy ? "分析中…" : "分析を実行";
   el("aiForceBtn").disabled = ai.busy;
   el("aiLoginBtn").disabled = ai.busy;
-  el("aiLogoutBtn").hidden = !aiGetToken();
+  const logged = aiLoggedIn();
+  el("aiLogoutBtn").hidden = !logged;
+  el("aiUser").hidden = !logged;
+  el("aiUser").innerHTML = logged ? `Name: <b>${esc(aiGetName() || "–")}</b>` : "";
   if (!aiConfigured()) aiStatus("GAS の URL が未設定です（AI_CONFIG.GAS_URL）", "error");
 }
 function aiShowLogin(msg) {
   el("aiLogin").hidden = false;
   setText("aiLoginErr", msg || "");
   el("aiPw").value = "";
-  el("aiPw").focus();
+  if (!el("aiName").value) el("aiName").value = aiGetName();   // 保存済みの Name を初期表示
+  (el("aiName").value ? el("aiPw") : el("aiName")).focus();
 }
 
 async function aiRun(force) {
   if (ai.busy) return;
   aiSavePrompt();
-  if (!aiGetToken()) { ai.pendingForce = !!force; aiShowLogin(""); aiStatus("パスワードを入力してください"); return; }
+  if (!aiLoggedIn()) { ai.pendingForce = !!force; aiShowLogin(""); aiStatus("Name とパスワードを入力してください"); return; }
   const pl = aiBuildPayload();
   if (!pl.posts.length) { aiStatus("分析対象の投稿がありません（いいね・PV が 0 件、またはフィルタ条件に該当なし）", "error"); return; }
 
@@ -632,15 +655,23 @@ async function aiRun(force) {
   aiStatus('<span class="ai-spinner"></span><span>AI が分析しています… <b id="aiSec">0</b> 秒</span>');
   ai.timer = setInterval(() => { const s = el("aiSec"); if (s) s.textContent = Math.floor((Date.now() - t0) / 1000); }, 250);
 
+  // 実行ログ（ログ記録用 GAS）と分析（分析用 GAS）を並行して送る。ログの成否は分析を止めない
+  const logP = aiLogEnabled()
+    ? aiPost({ action: "log", token: aiGetToken(AI_CONFIG.LOG_TOKEN_KEY), instructions: pl.prompt.instructions, constraints: pl.prompt.constraints }, AI_CONFIG.LOG_URL)
+    : Promise.resolve({ ok: true });
   const res = await aiPost({
     action: "analyze", token: aiGetToken(), context: pl.context, posts: pl.posts,
     instructions: pl.prompt.instructions, constraints: pl.prompt.constraints, force: !!force
   });
-  clearInterval(ai.timer); ai.busy = false; aiSyncButtons();
+  const logRes = await logP;
+  clearInterval(ai.timer); ai.busy = false;
+  if (!logRes.ok && logRes.code === "AUTH") localStorage.removeItem(AI_CONFIG.LOG_TOKEN_KEY); // 次回は再ログイン
+  aiSyncButtons();
   el("aiResult").classList.remove("loading");
+  const logWarn = logRes.ok ? "" : `<span class="warn">※ 実行ログを記録できませんでした（${esc(logRes.message || "不明なエラー")}）</span>`;
 
   if (!res.ok) {
-    if (res.code === "AUTH") { aiClearToken(); ai.pendingForce = !!force; aiShowLogin(res.message); aiStatus(""); return; }
+    if (res.code === "AUTH") { aiClearToken(); ai.pendingForce = !!force; aiShowLogin(res.message); aiStatus(logWarn); return; }
     aiStatus(esc(res.message || "分析に失敗しました"), "error"); el("aiForceBtn").hidden = false; return;
   }
   ai.lastKey = pl.key; ai.idMap = pl.idMap;
@@ -648,7 +679,7 @@ async function aiRun(force) {
   const sec = ((Date.now() - t0) / 1000).toFixed(1);
   const at = res.generated_at ? new Date(res.generated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   setText("aiMeta", `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""} ・ ${pl.posts.length} 投稿を分析`);
-  aiStatus("");
+  aiStatus(logWarn);
   el("aiForceBtn").hidden = false;
   el("aiRunBtn").classList.remove("stale");
 }
@@ -734,15 +765,29 @@ el("aiForceBtn").addEventListener("click", () => aiRun(true));
 el("aiLogoutBtn").addEventListener("click", () => { aiClearToken(); aiStatus("ログアウトしました"); });
 el("aiLogin").addEventListener("submit", async e => {
   e.preventDefault();
-  const pw = el("aiPw").value; if (!pw) return;
+  const name = el("aiName").value.replace(/\s+/g, " ").trim().slice(0, 40);
+  const pw = el("aiPw").value;
+  if (!name) { setText("aiLoginErr", "Name を入力してください"); el("aiName").focus(); return; }
+  if (!pw) return;
+  aiSetName(name); el("aiName").value = name;
   ai.busy = true; aiSyncButtons(); setText("aiLoginErr", "認証中…");
-  const res = await aiPost({ action: "login", password: pw });
+  // 分析用・ログ記録用の両方に同じ Name・パスワードで認証（並行）
+  const [res, logRes] = await Promise.all([
+    aiPost({ action: "login", name, password: pw }),
+    aiLogEnabled() ? aiPost({ action: "login", name, password: pw }, AI_CONFIG.LOG_URL) : Promise.resolve(null)
+  ]);
   ai.busy = false; el("aiPw").value = "";
   if (!res.ok) { aiSyncButtons(); setText("aiLoginErr", res.message || "認証に失敗しました"); el("aiPw").focus(); return; }
+  if (logRes && !logRes.ok) {
+    aiSetToken(res.token, res.expires_in);   // 分析側は成功しているので保持（再試行時はログ側も含めて再認証）
+    aiSyncButtons(); setText("aiLoginErr", "ログ記録用の認証に失敗しました：" + (logRes.message || "不明なエラー")); el("aiPw").focus(); return;
+  }
   aiSetToken(res.token, res.expires_in);
+  if (logRes) aiSetToken(logRes.token, logRes.expires_in, AI_CONFIG.LOG_TOKEN_KEY);
   el("aiLogin").hidden = true; setText("aiLoginErr", ""); aiSyncButtons();
   aiRun(ai.pendingForce);
 });
+el("aiName").value = aiGetName();
 aiInitPrompt();
 aiSyncButtons();
 
