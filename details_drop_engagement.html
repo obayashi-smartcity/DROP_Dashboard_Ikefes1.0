@@ -121,6 +121,10 @@
     .ai-opt-state.on { color:var(--rich); background:var(--rich-soft); padding:2px 8px; }
     .ai-opt-body { padding:0 14px 14px; border-top:1px solid var(--stroke-soft); }
     .ai-opt-body .ai-prompt { margin-top:12px; }
+    .ai-runbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:14px; }
+    .ai-run { padding:11px 28px; font-size:13.5px; }
+    .ai-run.stale { box-shadow:0 0 0 3px var(--rich-soft); }
+    .ai-run-note { font-size:11.5px; color:var(--dim); }
     .ai-login { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:14px; padding:12px; background:var(--bg); border:1px solid var(--stroke-soft); }
     .ai-login label { font-size:12px; color:var(--muted); font-weight:700; }
     .ai-login input { border:1px solid var(--stroke); background:#fff; font:13px var(--font); padding:8px 10px; border-radius:0; min-width:200px; }
@@ -223,7 +227,7 @@
     <div class="section-label" id="ai-section"><h2>AI Insight <span class="note">上位投稿の AI 分析</span></h2><div class="meta" id="aiMeta">未実行</div></div>
     <div class="panel ai-panel">
       <div class="ai-toolbar">
-        <div class="ai-desc">フィルタ条件・指示を変えると、いいね上位・PV上位 各 <b id="aiTopN">–</b> 件を AI が<b>自動で</b>分析し直します。</div>
+        <div class="ai-desc">現在のフィルタ条件で、いいね上位・PV上位 各 <b id="aiTopN">–</b> 件を AI に送って分析します。条件を決めてから「分析を実行」を押してください。</div>
         <div class="ai-actions">
           <button type="button" class="ai-link" id="aiForceBtn" hidden title="キャッシュを使わずに再生成します">再生成</button>
           <button type="button" class="ai-link" id="aiLogoutBtn" hidden>ログアウト</button>
@@ -234,7 +238,7 @@
         <input type="text" name="username" autocomplete="username" value="drop-ai" hidden />
         <label for="aiPw">パスワード</label>
         <input type="password" id="aiPw" autocomplete="current-password" required />
-        <button type="submit" class="ai-btn" id="aiLoginBtn">認証</button>
+        <button type="submit" class="ai-btn" id="aiLoginBtn">認証して分析</button>
         <span class="ai-err" id="aiLoginErr"></span>
       </form>
       <details class="ai-opt" id="aiOpt">
@@ -253,9 +257,13 @@
               <div class="cnt" id="aiConsCnt">0 / 400</div>
             </div>
           </div>
-          <div class="ai-hint">入力欄から離れる、または <kbd>Ctrl</kbd>+<kbd>Enter</kbd> で反映されます。入力内容はこのブラウザに保存されます。</div>
+          <div class="ai-hint">入力内容は次に「分析を実行」を押したときに反映されます（入力欄で <kbd>Ctrl</kbd>+<kbd>Enter</kbd> でも実行）。入力内容はこのブラウザに保存されます。</div>
         </div>
       </details>
+      <div class="ai-runbar">
+        <button type="button" class="ai-btn ai-run" id="aiRunBtn">分析を実行</button>
+        <span class="ai-run-note">押すたびに、その時点のフィルタ・指示・制約条件で分析します。</span>
+      </div>
       <div class="ai-status" id="aiStatus" hidden></div>
       <div class="ai-result" id="aiResult" hidden></div>
       <div class="ai-note">AI による自動分析です。少ない件数では傾向が偶然に左右されるため、判断の参考としてご利用ください。送信するのは上位投稿の本文（一部）・いいね数・PV数・投稿日時・性別・年代と、入力した指示・制約条件のみで、アカウント ID は送信しません。</div>
@@ -444,7 +452,7 @@ el("resetBtn").addEventListener("click", () => {
    - パスワードは保存しない。認証後に GAS が発行するトークンを localStorage に保持
      （GAS 側の有効期限＝最長 6 時間。期限切れ時は再入力を求める）
    - プロンプトは GAS が外部ファイルから読み込む（HTML 側では変更しない）
-   - 「AI で分析」ボタンは廃止。フィルタ・指示・制約条件の変更を検知して自動で分析する
+   - 分析は自動実行しない。「分析を実行」ボタン押下時のみ GAS を呼ぶ
 ===================================================================== */
 const AI_CONFIG = {
   GAS_URL: "https://script.google.com/macros/s/AKfycbwIEnhq2NYe_1JNxxpLvtJC07nQSBTyGmgY0rSX-7FxhN51WqR8k9XbYzw09ewK7CULlA/exec", // GAS ウェブアプリ URL
@@ -453,7 +461,6 @@ const AI_CONFIG = {
   SEND_NAME: false,            // true で投稿者表示名(account_name)も送る（施設アカウント中心なら有効）
   EXCLUDE: /^[\s　]*(テスト[\s　]*)+$/, // 分析から外す投稿本文（テスト投稿）
   TIMEOUT_MS: 60000,           // 通信タイムアウト（GAS 起動＋プロンプト取得＋推論で 30 秒を超えることがある）
-  AUTO_DELAY_MS: 1500,         // フィルタ操作が止まってから自動分析するまでの待ち時間
   MAX_INSTR: 400,              // 追加指示・制約条件の文字数上限（GAS 側と合わせる）
   TOKEN_KEY: "dropEngagementAiToken",
   PROMPT_KEY: "dropEngagementAiPrompt",
@@ -461,7 +468,7 @@ const AI_CONFIG = {
   PRESETS: ["追加予算をかけない", "1 か月以内に実施できる", "主催者・自治体職員だけで実施できる", "既存の告知チャネルを使う", "参加者の個人情報を新たに集めない"]
 };
 
-const ai = { lastKey: null, idMap: {}, timer: null, autoTimer: null, busy: false, queued: false, pendingForce: false };
+const ai = { lastKey: null, idMap: {}, timer: null, busy: false, pendingForce: false };
 
 /* ---- トークン ---- */
 function aiGetToken() {
@@ -511,14 +518,14 @@ function aiInitPrompt() {
     const lines = consLines(), t = b.dataset.preset;
     const next = lines.includes(t) ? lines.filter(x => x !== t) : [...lines, t];
     el("aiCons").value = next.join("\n").slice(0, AI_CONFIG.MAX_INSTR);
-    syncPresets(); syncCount(); aiSavePrompt(); aiSchedule(400);
+    syncPresets(); syncCount(); aiSavePrompt(); aiCheckStale();
   }));
   ["aiInstr", "aiCons"].forEach(id => {
     const ta = el(id);
     ta.addEventListener("input", () => { syncCount(); syncPresets(); });
-    ta.addEventListener("change", () => { aiSavePrompt(); aiSchedule(200); });           // フォーカスが外れたら反映
+    ta.addEventListener("change", () => { aiSavePrompt(); aiCheckStale(); });            // 保存のみ（実行はボタン）
     ta.addEventListener("keydown", e => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); aiSavePrompt(); aiSchedule(0); }
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); aiSavePrompt(); aiRun(false); }
     });
   });
   syncPresets(); syncCount();
@@ -598,6 +605,8 @@ function aiStatus(html, cls) {
 }
 function aiConfigured() { return !/X{6,}/.test(AI_CONFIG.GAS_URL); }
 function aiSyncButtons() {
+  el("aiRunBtn").disabled = ai.busy || !aiConfigured();
+  el("aiRunBtn").textContent = ai.busy ? "分析中…" : "分析を実行";
   el("aiForceBtn").disabled = ai.busy;
   el("aiLoginBtn").disabled = ai.busy;
   el("aiLogoutBtn").hidden = !aiGetToken();
@@ -607,21 +616,14 @@ function aiShowLogin(msg) {
   el("aiLogin").hidden = false;
   setText("aiLoginErr", msg || "");
   el("aiPw").value = "";
-  if (msg) el("aiPw").focus();
-}
-
-/* 自動分析の予約：フィルタや指示の変更が落ち着いてから 1 回だけ実行（同条件はスキップ） */
-function aiSchedule(delay) {
-  if (!aiConfigured() || !POSTS.length) return;
-  clearTimeout(ai.autoTimer);
-  ai.autoTimer = setTimeout(() => aiRun(false), delay == null ? AI_CONFIG.AUTO_DELAY_MS : delay);
+  el("aiPw").focus();
 }
 
 async function aiRun(force) {
-  if (ai.busy) { ai.queued = true; return; }                      // 実行中の変更は終了後に反映
-  if (!aiGetToken()) { ai.pendingForce = !!force; aiShowLogin(""); aiStatus("分析を表示するにはパスワードを入力してください"); return; }
+  if (ai.busy) return;
+  aiSavePrompt();
+  if (!aiGetToken()) { ai.pendingForce = !!force; aiShowLogin(""); aiStatus("パスワードを入力してください"); return; }
   const pl = aiBuildPayload();
-  if (!force && pl.key === ai.lastKey) { aiStatus(""); return; }   // 条件が変わっていない
   if (!pl.posts.length) { aiStatus("分析対象の投稿がありません（いいね・PV が 0 件、またはフィルタ条件に該当なし）", "error"); return; }
 
   ai.busy = true; aiSyncButtons();
@@ -638,7 +640,6 @@ async function aiRun(force) {
   el("aiResult").classList.remove("loading");
 
   if (!res.ok) {
-    ai.queued = false;
     if (res.code === "AUTH") { aiClearToken(); ai.pendingForce = !!force; aiShowLogin(res.message); aiStatus(""); return; }
     aiStatus(esc(res.message || "分析に失敗しました"), "error"); el("aiForceBtn").hidden = false; return;
   }
@@ -649,7 +650,7 @@ async function aiRun(force) {
   setText("aiMeta", `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""} ・ ${pl.posts.length} 投稿を分析`);
   aiStatus("");
   el("aiForceBtn").hidden = false;
-  if (ai.queued) { ai.queued = false; aiSchedule(0); }
+  el("aiRunBtn").classList.remove("stale");
 }
 
 const AI_ICON = {
@@ -717,17 +718,20 @@ function aiRenderResult(r, pl) {
   }));
 }
 
-/* render() から呼ばれる：条件が変わっていれば自動で再分析を予約 */
+/* 条件が表示中の分析と違えば知らせる（自動実行はしない） */
 function aiCheckStale() {
   if (typeof POSTS === "undefined" || !POSTS.length) return;
   setText("aiTopN", AI_CONFIG.TOP_N);
-  if (aiBuildPayload().key === ai.lastKey) return;
-  if (ai.lastKey && aiGetToken()) aiStatus("条件が変わりました。まもなく自動で分析し直します…", "stale");
-  aiSchedule();
+  if (!ai.lastKey || ai.busy) return;
+  const stale = aiBuildPayload().key !== ai.lastKey;
+  el("aiRunBtn").classList.toggle("stale", stale);
+  if (stale) aiStatus("条件が変わりました。表示中の分析は以前の条件のものです。「分析を実行」で更新してください。", "stale");
+  else if (el("aiStatus").classList.contains("stale")) aiStatus("");
 }
 
-el("aiForceBtn").addEventListener("click", () => { clearTimeout(ai.autoTimer); aiRun(true); });
-el("aiLogoutBtn").addEventListener("click", () => { aiClearToken(); aiStatus("ログアウトしました"); aiShowLogin(""); });
+el("aiRunBtn").addEventListener("click", () => aiRun(false));
+el("aiForceBtn").addEventListener("click", () => aiRun(true));
+el("aiLogoutBtn").addEventListener("click", () => { aiClearToken(); aiStatus("ログアウトしました"); });
 el("aiLogin").addEventListener("submit", async e => {
   e.preventDefault();
   const pw = el("aiPw").value; if (!pw) return;
