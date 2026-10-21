@@ -7,7 +7,8 @@
  * ■ アクション（POST / Content-Type: text/plain / body は JSON 文字列）
  *   { "action":"login",   "password":"..." }
  *       → { ok:true, token:"...", expires_in:秒 }
- *   { "action":"analyze", "token":"...", "context":{...}, "posts":[...], "force":false }
+ *   { "action":"analyze", "token":"...", "context":{...}, "posts":[...],
+ *     "instructions":"追加の指示（任意）", "constraints":"Next Action の制約条件（任意）", "force":false }
  *       → { ok:true, cached:bool, elapsed_ms, model, prompt_version, generated_at, result:{...} }
  *   エラー時 → { ok:false, code:"AUTH|LOCKED|LIMIT|BUSY|BAD_REQUEST|CONFIG|AI|SERVER", message:"..." }
  *
@@ -23,15 +24,21 @@
  *     RESULT_CACHE_SEC    (21600)  … 同一条件の分析結果キャッシュ
  *     PROMPT_CACHE_SEC    (300)    … プロンプトのキャッシュ（GitHub raw 側にも数分のキャッシュあり）
  *     DAILY_LIMIT         (100)    … AI 呼び出し回数 / 日（キャッシュヒット・失敗は数えない）
- *     MAX_FAILS           (10)     … パスワード連続失敗でロックする回数（15 分窓）
+ *     MAX_FAILS           (30)     … パスワード失敗でロックする回数（15 分窓・全利用者共通）
  *     MAX_POSTS           (20)     … 受け付ける投稿数の上限
  *     MAX_TEXT            (300)    … 投稿本文 1 件あたりの最大文字数
+ *     MAX_INSTR           (400)    … 追加の指示・制約条件それぞれの最大文字数
  *
  * ■ デプロイ
  *   デプロイ → 新しいデプロイ → 種類「ウェブアプリ」
  *     次のユーザーとして実行: 自分 / アクセスできるユーザー: 全員
  *   発行された /exec URL を HTML の AI_CONFIG.GAS_URL に設定する。
  *   ※ コード修正後は「デプロイを管理 → 編集 → 新バージョン」で同じ URL のまま更新。
+ *
+ * ■ 貼り付け時の注意
+ *   チャットや Web 画面からコピーすると、URL が a タグに、記号 > < が HTML 実体参照に化けることがある。
+ *   貼り付け後に「&g」+「t;」「&l」+「t;」「<a」+「 href」（各 + は除いて連結）で検索し、0 件であることを確認すること。
+ *   checkSetup() 実行時にも自動で検出する。
  */
 
 /* ============================== 設定 ============================== */
@@ -40,10 +47,12 @@
 const AZURE_MODEL = {
   name: 'gpt-6-luna',
   deployment: 'gpt-6-luna',
-  endpoint: 'https://uhr65-mkgfgxtk-eastus2.openai.azure.com/',
+  endpoint: 'https://uhr65-mkgfgxtk-eastus2.openai.azure.com',
   api_version: '2025-04-01-preview',
   secret: 'AZURE_API_KEY_LUNA' // ← この名前のスクリプトプロパティに API キーを登録
 };
+
+const RAW_GITHUB_BASE = 'https://raw.githubusercontent.com';
 
 const DEFAULTS = {
   REASONING_EFFORT: 'none',
@@ -52,21 +61,23 @@ const DEFAULTS = {
   RESULT_CACHE_SEC: 21600,
   PROMPT_CACHE_SEC: 300,
   DAILY_LIMIT: 100,
-  MAX_FAILS: 10,
+  MAX_FAILS: 30,
   MAX_POSTS: 20,
-  MAX_TEXT: 300
+  MAX_TEXT: 300,
+  MAX_INSTR: 400
 };
 
 const CACHE_MAX_SEC = 21600;   // CacheService の上限（6 時間）
 const FAIL_WINDOW_SEC = 900;   // パスワード失敗カウントの窓（15 分）
 const KEY = {
   FAIL: 'auth_fail',
-  PROMPT: 'prompt_v2',
+  PROMPT: 'prompt_v3',
   TOKEN: 'tok_',
   RESULT: 'res_',
   QUOTA: 'count_'
 };
-const LIMITS = { TRAITS: 3, EVIDENCE: 3, GAP: 3, RECOMMENDATIONS: 3, CAVEATS: 2 };
+const LIMITS = { TRAITS: 3, EVIDENCE: 3, ACTIONS: 3, CAVEATS: 2 };
+const LEVELS = ['低', '中', '高'];
 
 /** クライアントに返してよいエラー */
 class AppError extends Error {
@@ -113,7 +124,7 @@ function doPost(e) {
     }
   } catch (err) {
     if (err instanceof AppError) return fail_(err.code, err.message);
-    // 内部情報（ファイル名・URL・スタック等）はクライアントに返さず、実行ログにだけ残す
+    // 内部情報（URL・スタック等）はクライアントに返さず、実行ログにだけ残す
     console.error((err && err.stack) || err);
     return fail_('SERVER', 'サーバーエラーが発生しました。管理者は GAS の実行ログを確認してください');
   }
@@ -169,13 +180,15 @@ function handleAnalyze_(req) {
   const posts = sanitizePosts_(req.posts);
   if (!posts.length) throw new AppError('BAD_REQUEST', '分析対象の投稿がありません');
   const context = sanitizeContext_(req.context);
+  const instructions = sanitizeInstr_(req.instructions);
+  const constraints = sanitizeInstr_(req.constraints);
 
   const prompt = loadPrompt_();
   const model = AZURE_MODEL.name;
 
   // 結果キャッシュ（データ・プロンプト・モデルが同じなら再利用）
   const cache = CacheService.getScriptCache();
-  const cacheKey = KEY.RESULT + sha256_(JSON.stringify([model, prompt.version, context, posts]));
+  const cacheKey = KEY.RESULT + sha256_(JSON.stringify([model, prompt.version, context, posts, instructions, constraints]));
   if (!req.force) {
     const hit = cache.get(cacheKey);
     if (hit) {
@@ -190,13 +203,25 @@ function handleAnalyze_(req) {
   if (!adjustDailyQuota_(+1)) throw new AppError('LIMIT', '本日の AI 分析回数の上限に達しました');
 
   const ids = posts.map(p => p.id);
+  const vars = {
+    CONTEXT: JSON.stringify(context),
+    POSTS: JSON.stringify(posts),
+    POST_IDS: ids.join(', '),
+    INSTRUCTIONS: instructions || '（なし）',
+    CONSTRAINTS: constraints || '（なし）'
+  };
+  let userText = fillTemplate_(prompt.user, vars);
+  // 旧プロンプト（差し込み欄なし）でも指示・制約が届くよう末尾に補う
+  const tplRaw = prompt.user.replace(/\\/g, '');
+  if (instructions && !/\{\{\s*INSTRUCTIONS\s*\}\}/.test(tplRaw)) {
+    userText += '\n\n### 利用者からの追加の指示\n' + instructions;
+  }
+  if (constraints && !/\{\{\s*CONSTRAINTS\s*\}\}/.test(tplRaw)) {
+    userText += '\n\n### Next Action の制約条件\n' + constraints;
+  }
   const messages = [
     { role: 'system', content: prompt.system },
-    { role: 'user', content: fillTemplate_(prompt.user, {
-      CONTEXT: JSON.stringify(context),
-      POSTS: JSON.stringify(posts),
-      POST_IDS: ids.join(', ')
-    }) }
+    { role: 'user', content: userText }
   ];
 
   let data;
@@ -227,12 +252,21 @@ function sanitizePosts_(raw) {
   const maxText = numProp_('MAX_TEXT');
   const num = v => (isFinite(Number(v)) ? Number(v) : 0);
   const str = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  const used = new Set();
   return raw
     .filter(p => p && typeof p === 'object')
     .slice(0, numProp_('MAX_POSTS'))
     .map((p, i) => {
+      // ID は P<数字> のみ許可。不正・重複時は連番で振り直す
+      let id = /^P\d{1,3}$/.test(String(p.id)) ? String(p.id) : '';
+      if (!id || used.has(id)) {
+        let n = i + 1;
+        while (used.has('P' + n)) n++;
+        id = 'P' + n;
+      }
+      used.add(id);
       const o = {
-        id: /^P\d{1,3}$/.test(String(p.id)) ? String(p.id) : 'P' + (i + 1),
+        id: id,
         groups: (Array.isArray(p.groups) ? p.groups : []).filter(g => g === 'like_top' || g === 'pv_top'),
         like_rank: num(p.like_rank),
         pv_rank: num(p.pv_rank),
@@ -249,6 +283,17 @@ function sanitizePosts_(raw) {
       if (p.name) o.name = str(p.name, 40);
       return o;
     });
+}
+
+/** 追加の指示・制約条件：文字列のみ・制御文字除去・長さ制限。行頭の # は除去してプロンプトの見出し構造を崩させない */
+function sanitizeInstr_(raw) {
+  return String(raw == null ? '' : raw)
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, ' ')
+    .replace(/^[ \t]*#+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, numProp_('MAX_INSTR'));
 }
 
 function sanitizeContext_(raw) {
@@ -271,24 +316,36 @@ function sanitizeContext_(raw) {
   };
 }
 
-/** AI 出力を画面が想定する形に整える（件数上限の強制・存在しない ID の除去） */
+/** AI 出力を画面が想定する形に整える（文字列のみ採用・件数上限の強制・存在しない ID の除去） */
 function normalizeResult_(data, validIds) {
   const d = data && typeof data === 'object' ? data : {};
-  const list = (v, max) => (Array.isArray(v) ? v.map(String).filter(Boolean).slice(0, max) : []);
+  const text = v => (typeof v === 'string' ? v : '');
+  const list = (v, max) => (Array.isArray(v) ? v.filter(x => typeof x === 'string' && x).slice(0, max) : []);
   const group = g => {
     const x = g && typeof g === 'object' ? g : {};
     return {
-      summary: String(x.summary || ''),
+      summary: text(x.summary),
       traits: list(x.traits, LIMITS.TRAITS),
-      evidence_ids: list(x.evidence_ids, Infinity).filter(id => validIds.has(id)).slice(0, LIMITS.EVIDENCE)
+      evidence_ids: [...new Set(list(x.evidence_ids, Infinity).filter(id => validIds.has(id)))].slice(0, LIMITS.EVIDENCE)
     };
   };
+  const level = v => (LEVELS.indexOf(v) >= 0 ? v : '');
+  const actions = v => (Array.isArray(v) ? v : [])
+    .filter(a => a && typeof a === 'object' && typeof a.title === 'string' && a.title)
+    .slice(0, LIMITS.ACTIONS)
+    .map(a => ({
+      title: a.title,
+      detail: text(a.detail),
+      impact: level(a.impact),
+      effort: level(a.effort),
+      evidence_ids: [...new Set(list(a.evidence_ids, Infinity).filter(id => validIds.has(id)))].slice(0, LIMITS.EVIDENCE)
+    }));
   return {
-    headline: String(d.headline || ''),
+    headline: text(d.headline),
     like_top: group(d.like_top),
     pv_top: group(d.pv_top),
-    gap_insights: list(d.gap_insights, LIMITS.GAP),
-    recommendations: list(d.recommendations, LIMITS.RECOMMENDATIONS),
+    like_actions: actions(d.like_actions),
+    pv_next_actions: actions(d.pv_next_actions),
     caveats: list(d.caveats, LIMITS.CAVEATS)
   };
 }
@@ -300,7 +357,7 @@ function normalizeResult_(data, validIds) {
  *   ## SYSTEM  （または ### SYSTEM）
  *   （システムプロンプト）
  *   ## USER    （または ### USER）
- *   （ユーザープロンプト。{{CONTEXT}} {{POSTS}} {{POST_IDS}} を置換）
+ *   （ユーザープロンプト。{{CONTEXT}} {{POSTS}} {{POST_IDS}} {{INSTRUCTIONS}} {{CONSTRAINTS}} を置換）
  * <!-- --> コメントは送信前に除去する。
  */
 function loadPrompt_() {
@@ -309,9 +366,17 @@ function loadPrompt_() {
   if (hit) return JSON.parse(hit);
 
   const url = normalizePromptUrl_(prop_('PROMPT_URL'));
-  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-  if (res.getResponseCode() !== 200) {
-    throw new Error('プロンプトファイルを取得できません (HTTP ' + res.getResponseCode() + ') ' + url);
+  let res;
+  try {
+    res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+  } catch (e) {
+    console.error('prompt fetch failed: ' + url, e);
+    throw new AppError('CONFIG', 'プロンプトファイルに接続できません。管理者は PROMPT_URL を確認してください');
+  }
+  const code = res.getResponseCode();
+  if (code !== 200) {
+    console.error('prompt fetch HTTP ' + code + ': ' + url);
+    throw new AppError('CONFIG', 'プロンプトファイルを取得できません（HTTP ' + code + '）。管理者は PROMPT_URL を確認してください');
   }
   const prompt = parsePrompt_(res.getContentText('UTF-8'));
   cache.put(KEY.PROMPT, JSON.stringify(prompt), Math.min(numProp_('PROMPT_CACHE_SEC'), CACHE_MAX_SEC));
@@ -320,22 +385,23 @@ function loadPrompt_() {
 
 /** github.com/<owner>/<repo>/blob/<ref>/<path> → raw.githubusercontent.com に変換 */
 function normalizePromptUrl_(url) {
-  if (!url) throw new Error('PROMPT_URL を設定してください');
-  const m = String(url).trim().match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
-  return m ? 'https://raw.githubusercontent.com/' + m[1] + '/' + m[2] + '/' + m[3] : String(url).trim();
+  const u = String(url || '').trim();
+  if (!u) throw new AppError('CONFIG', 'スクリプトプロパティ PROMPT_URL が未設定です');
+  const m = u.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
+  return m ? [RAW_GITHUB_BASE, m[1], m[2], m[3]].join('/') : u;
 }
 
 function parsePrompt_(rawText) {
   if (/^\s*<(!doctype|html)/i.test(rawText)) {
-    throw new Error('プロンプトが HTML で返りました。PROMPT_URL に raw URL（raw.githubusercontent.com）を指定してください');
+    throw new AppError('CONFIG', 'プロンプトが HTML で返りました。PROMPT_URL に raw URL（raw.githubusercontent.com）を指定してください');
   }
   const text = rawText
     .replace(/^\uFEFF/, '')
     .replace(/\r\n?/g, '\n')
     .replace(/<!--[\s\S]*?-->/g, '');
-  // 見出しは ## / ### どちらも可。行頭のみ対象（本文中の #### 見出しとは区別される）
+  // 見出しは ## / ### どちらも可。行頭のみ対象
   const m = text.match(/^#{2,3}[ \t]*SYSTEM[ \t]*\n([\s\S]*?)^#{2,3}[ \t]*USER[ \t]*\n([\s\S]*)$/im);
-  if (!m) throw new Error('プロンプトファイルに「## SYSTEM」「## USER」の見出しがありません');
+  if (!m) throw new AppError('CONFIG', 'プロンプトファイルに「## SYSTEM」「## USER」の見出しがありません');
   return { system: m[1].trim(), user: m[2].trim(), version: sha256_(text).slice(0, 10) };
 }
 
@@ -364,16 +430,26 @@ const OUTPUT_SCHEMA = (() => {
     required: ['summary', 'traits', 'evidence_ids'],
     properties: { summary: { type: 'string' }, traits: strArr, evidence_ids: strArr }
   };
+  const level = { type: 'string', enum: LEVELS };
+  const actions = {
+    type: 'array',
+    items: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['title', 'detail', 'impact', 'effort', 'evidence_ids'],
+      properties: { title: { type: 'string' }, detail: { type: 'string' }, impact: level, effort: level, evidence_ids: strArr }
+    }
+  };
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['headline', 'like_top', 'pv_top', 'gap_insights', 'recommendations', 'caveats'],
+    required: ['headline', 'like_top', 'pv_top', 'like_actions', 'pv_next_actions', 'caveats'],
     properties: {
       headline: { type: 'string' },
       like_top: group,
       pv_top: group,
-      gap_insights: strArr,
-      recommendations: strArr,
+      like_actions: actions,
+      pv_next_actions: actions,
       caveats: strArr
     }
   };
@@ -404,6 +480,7 @@ function callAzureOpenAI_(apiKey, messages) {
   try {
     json = JSON.parse(r.text);
   } catch (e) {
+    console.error('Azure OpenAI non-JSON', r.code, String(r.text).slice(0, 500));
     throw new AppError('AI', 'Azure OpenAI の応答を解釈できません (HTTP ' + r.code + ')');
   }
   if (r.code !== 200) {
@@ -430,13 +507,19 @@ function callAzureOpenAI_(apiKey, messages) {
 }
 
 function postAzure_(apiKey, body) {
-  const res = UrlFetchApp.fetch(azureUrl_(), {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'api-key': apiKey },
-    payload: JSON.stringify(body),
-    muteHttpExceptions: true
-  });
+  let res;
+  try {
+    res = UrlFetchApp.fetch(azureUrl_(), {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'api-key': apiKey },
+      payload: JSON.stringify(body),
+      muteHttpExceptions: true
+    });
+  } catch (e) {
+    console.error('Azure OpenAI fetch failed', e);
+    throw new AppError('AI', 'Azure OpenAI に接続できません。endpoint の設定を確認してください');
+  }
   return { code: res.getResponseCode(), text: res.getContentText() };
 }
 
@@ -459,7 +542,7 @@ function adjustDailyQuota_(delta) {
     const n = Number(props.getProperty(key) || 0);
     if (delta > 0 && n >= numProp_('DAILY_LIMIT')) return false;
     props.setProperty(key, String(Math.max(0, n + delta)));
-    if (delta > 0) {
+    if (delta > 0 && n === 0) { // その日の初回だけ古いカウンタを掃除
       props.getKeys()
         .filter(k => k.indexOf(KEY.QUOTA) === 0 && k !== key)
         .forEach(k => props.deleteProperty(k));
@@ -491,9 +574,15 @@ function fail_(code, message) { return json_({ ok: false, code: code, message: m
 
 /** 設定とプロンプトの読み込みを確認（エディタから実行） */
 function checkSetup() {
+  // 貼り付け時の HTML 混入チェック
+  const url = azureUrl_();
+  if (!/^https:\/\/[^\s<>"']+$/.test(url)) {
+    console.error('★ AZURE_MODEL.endpoint に HTML 等が混入しています: ' + AZURE_MODEL.endpoint);
+  }
   ['APP_PASSWORD', AZURE_MODEL.secret, 'PROMPT_URL'].forEach(k => console.log(k + ': ' + (prop_(k) ? '設定済み' : '★未設定')));
-  console.log('MODEL: ' + AZURE_MODEL.name + ' / URL: ' + azureUrl_());
+  console.log('MODEL: ' + AZURE_MODEL.name + ' / URL: ' + url);
   console.log('REASONING_EFFORT: ' + (prop_('REASONING_EFFORT') || '(送らない)') + ' / MAX_OUTPUT_TOKENS: ' + numProp_('MAX_OUTPUT_TOKENS'));
+  console.log('PROMPT 取得先: ' + normalizePromptUrl_(prop_('PROMPT_URL')));
   clearPromptCache();
   const p = loadPrompt_();
   console.log('プロンプト version=' + p.version + ' system=' + p.system.length + '字 user=' + p.user.length + '字');
@@ -506,6 +595,8 @@ function testAnalyze() {
   const out = JSON.parse(handleAnalyze_({
     token: login.token,
     force: true,
+    instructions: '夜間の投稿に注目して',
+    constraints: '追加予算をかけない\n1 か月以内に実施できる',
     context: { event: 'test', total_posts: 3, total_likes: 3, total_pv: 30, top_n: 2 },
     posts: [
       { id: 'P1', groups: ['like_top', 'pv_top'], like_rank: 1, pv_rank: 1, like: 2, pv: 16, like_rate: 12.5, date: '2026-10-19', hour: '18', text_len: 40, text: '夜の蔵はレトロな趣が深まり、昼とは違う魅力があります。' },
