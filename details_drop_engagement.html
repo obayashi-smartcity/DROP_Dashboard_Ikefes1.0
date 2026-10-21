@@ -93,6 +93,10 @@
     .ai-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .ai-desc { font-size:12px; color:var(--muted); line-height:1.6; }
     .ai-desc b { color:var(--rich); }
+    .ai-topn { display:inline-flex; align-items:center; gap:4px; vertical-align:middle; margin:0 2px; }
+    .ai-topn input { width:64px; box-sizing:border-box; border:1px solid var(--stroke); background:#fff; color:var(--rich); font:800 13px var(--font); font-variant-numeric:tabular-nums; padding:4px 6px; border-radius:0; text-align:right; }
+    .ai-topn input:focus { outline:2px solid var(--rich-soft); border-color:var(--rich); }
+    .ai-topn-range { font-size:10.5px; color:var(--dim); margin-left:4px; }
     .ai-actions { display:flex; align-items:center; gap:12px; }
     .ai-btn { border:1px solid var(--rich); background:var(--rich); color:#fff; font:700 12.5px var(--font); padding:9px 18px; cursor:pointer; border-radius:0; transition:.15s; white-space:nowrap; }
     .ai-btn:hover { filter:brightness(1.08); }
@@ -230,7 +234,7 @@
     <div class="section-label" id="ai-section"><h2>AI Insight <span class="note">上位投稿の AI 分析</span></h2><div class="meta" id="aiMeta">未実行</div></div>
     <div class="panel ai-panel">
       <div class="ai-toolbar">
-        <div class="ai-desc">現在のフィルタ条件で、いいね上位・PV上位 各 <b id="aiTopN">–</b> 件を AI に送って分析します。条件を決めてから「分析を実行」を押してください。</div>
+        <div class="ai-desc">現在のフィルタ条件で、いいね上位・PV上位 各 <span class="ai-topn"><input type="number" id="aiTopN" inputmode="numeric" step="1" aria-label="分析対象の上位件数" /></span> 件<span class="ai-topn-range" id="aiTopNRange"></span> を AI に送って分析します。条件を決めてから「分析を実行」を押してください。</div>
         <div class="ai-actions">
           <button type="button" class="ai-link" id="aiForceBtn" hidden title="キャッシュを使わずに再生成します">再生成</button>
           <span class="ai-user" id="aiUser" hidden></span>
@@ -466,7 +470,10 @@ el("resetBtn").addEventListener("click", () => {
 ===================================================================== */
 const AI_CONFIG = {
   GAS_URL: "https://script.google.com/macros/s/AKfycbwIEnhq2NYe_1JNxxpLvtJC07nQSBTyGmgY0rSX-7FxhN51WqR8k9XbYzw09ewK7CULlA/exec", // GAS ウェブアプリ URL
-  TOP_N: 5,                    // いいね上位・PV上位それぞれの件数（重複は 1 件にまとめる）
+  TOP_N: 5,                    // いいね上位・PV上位それぞれの件数の初期値（UI で変更可。重複は 1 件にまとめる）
+  TOP_N_MIN: 1,                // UI で指定できる下限
+  TOP_N_MAX: 20,               // UI で指定できる上限（GAS 側・送信量との兼ね合いで調整）
+  TOP_N_KEY: "dropEngagementAiTopN", // 指定した件数をこのブラウザに保存するキー
   MAX_TEXT: 200,               // 本文の送信文字数上限
   SEND_NAME: false,            // true で投稿者表示名(account_name)も送る（施設アカウント中心なら有効）
   EXCLUDE: /^[\s　]*(テスト[\s　]*)+$/, // 分析から外す投稿本文（テスト投稿）
@@ -481,7 +488,40 @@ const AI_CONFIG = {
   PRESETS: ["追加予算をかけない", "即座に実行できる", "主催者・ビルオーナー側だけでできる", "参加者に促す"]
 };
 
-const ai = { lastKey: null, idMap: {}, timer: null, busy: false, pendingForce: false };
+/* ---- 上位件数（TOP_N）：UI で設定。範囲外・非数値は補正し、ブラウザに保存 ---- */
+function aiClampTopN(v) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return AI_CONFIG.TOP_N;
+  return Math.min(AI_CONFIG.TOP_N_MAX, Math.max(AI_CONFIG.TOP_N_MIN, n));
+}
+function aiGetTopN() { return aiClampTopN(ai.topN); }
+function aiInitTopN() {
+  try {
+    const saved = localStorage.getItem(AI_CONFIG.TOP_N_KEY);
+    if (saved !== null) ai.topN = aiClampTopN(saved);
+  } catch (e) {}
+  const inp = el("aiTopN");
+  inp.min = AI_CONFIG.TOP_N_MIN; inp.max = AI_CONFIG.TOP_N_MAX;
+  inp.value = aiGetTopN();
+  setText("aiTopNRange", `（${AI_CONFIG.TOP_N_MIN}〜${AI_CONFIG.TOP_N_MAX}）`);
+  // 入力中は有効な値のときだけ反映（途中の空欄では補正しない）
+  inp.addEventListener("input", () => {
+    if (inp.value === "") return;
+    ai.topN = aiClampTopN(inp.value);
+    aiCheckStale();
+  });
+  // 確定時に範囲内へ補正して保存
+  inp.addEventListener("change", () => {
+    ai.topN = aiClampTopN(inp.value);
+    inp.value = ai.topN;
+    try { localStorage.setItem(AI_CONFIG.TOP_N_KEY, String(ai.topN)); } catch (e) {}
+    aiCheckStale();
+  });
+  inp.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); inp.dispatchEvent(new Event("change")); aiRun(false); }
+  });
+}
+const ai = { topN: AI_CONFIG.TOP_N, lastKey: null, idMap: {}, timer: null, busy: false, pendingForce: false };
 
 /* ---- トークン ---- */
 function aiLogEnabled() { return !!AI_CONFIG.LOG_URL && !/X{6,}/.test(AI_CONFIG.LOG_URL); }
@@ -575,11 +615,12 @@ async function aiPost(body, url = AI_CONFIG.GAS_URL) {
 
 /* 送信データ作成：現在のフィルタ結果から上位のみ。アカウント ID・画像・位置は送らない */
 function aiBuildPayload() {
+  const topN = aiGetTopN();
   const base = POSTS.filter(pass).filter(p => !AI_CONFIG.EXCLUDE.test(p.s || ""));
   const likeRanked = rankBy(base, "like", "pv"), pvRanked = rankBy(base, "pv", "like");
   const likeRank = new Map(likeRanked.map(p => [p.id, p.rank])), pvRank = new Map(pvRanked.map(p => [p.id, p.rank]));
-  const likeTop = likeRanked.filter(p => p.like > 0).slice(0, AI_CONFIG.TOP_N);
-  const pvTop = pvRanked.filter(p => p.pv > 0).slice(0, AI_CONFIG.TOP_N);
+  const likeTop = likeRanked.filter(p => p.like > 0).slice(0, topN);
+  const pvTop = pvRanked.filter(p => p.pv > 0).slice(0, topN);
 
   const picked = new Map();
   [[likeTop, "like_top"], [pvTop, "pv_top"]].forEach(([list, g]) => list.forEach(p => {
@@ -614,7 +655,7 @@ function aiBuildPayload() {
     avg_like: base.length ? r2(totalLikes / base.length) : 0,
     avg_pv: base.length ? r2(totalPv / base.length) : 0,
     avg_like_rate: totalPv ? Math.round(totalLikes / totalPv * 1000) / 10 : 0,
-    top_n: AI_CONFIG.TOP_N
+    top_n: topN
   };
   const prompt = aiReadPrompt();
   return { posts, context, idMap, prompt, key: JSON.stringify([context, posts.map(p => [idMap[p.id], p.like, p.pv]), prompt]) };
@@ -755,7 +796,6 @@ function aiRenderResult(r, pl) {
 /* 条件が表示中の分析と違えば知らせる（自動実行はしない） */
 function aiCheckStale() {
   if (typeof POSTS === "undefined" || !POSTS.length) return;
-  setText("aiTopN", AI_CONFIG.TOP_N);
   if (!ai.lastKey || ai.busy) return;
   const stale = aiBuildPayload().key !== ai.lastKey;
   el("aiRunBtn").classList.toggle("stale", stale);
@@ -792,6 +832,7 @@ el("aiLogin").addEventListener("submit", async e => {
 });
 el("aiName").value = aiGetName();
 aiInitPrompt();
+aiInitTopN();
 aiSyncButtons();
 
 /* ---- 起動 ---- */
