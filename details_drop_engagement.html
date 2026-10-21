@@ -387,7 +387,7 @@ const AI_CONFIG = {
   MAX_TEXT: 200,               // 本文の送信文字数上限
   SEND_NAME: false,            // true で投稿者表示名(account_name)も送る（施設アカウント中心なら有効）
   EXCLUDE: /^[\s　]*(テスト[\s　]*)+$/, // 分析から外す投稿本文（テスト投稿）
-  TIMEOUT_MS: 30000,           // 通信タイムアウト
+  TIMEOUT_MS: 60000,           // 通信タイムアウト（GAS 起動＋プロンプト取得＋推論で 30 秒を超えることがある）
   TOKEN_KEY: "dropEngagementAiToken"
 };
 
