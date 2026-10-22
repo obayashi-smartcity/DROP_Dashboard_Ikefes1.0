@@ -223,7 +223,7 @@
       </div>
 
       <div class="footer-note">
-        データソース: <code>json/mart_action_drop.json</code> ・ イベント <code>ikefes-2025</code> ・
+        データソース: <code>json/mart_action_drop.json</code> ・ イベント <code>ikefes-2026</code> ・
         本ダッシュボードは社内デザインシステム（dashboard-common.css）に準拠しています。
       </div>
     </main>
@@ -289,12 +289,21 @@
   const state = { genders: new Set(), ages: new Set(), dmin: null, dmax: null, limit: CONFIG.pageSize };
   let POSTS = [], DATES = [], map, markerLayer, markerById = {}, sliderBuilt = false;
 
+  // 日本国内の有効な緯度経度のみ許可（0,0 や欠損値・"undefined" 由来の値を除外）
+  function isValidLatLng(lat, lng) {
+    const a = Number(lat), b = Number(lng);
+    if (lat == null || lng == null || !Number.isFinite(a) || !Number.isFinite(b)) return false;
+    if (a === 0 && b === 0) return false;
+    return a >= 20 && a <= 46 && b >= 122 && b <= 154;
+  }
   // JSON を直接参照して描画用に整形
   function normalize(records) {
     const out = [];
     for (const r of records) {
       const lat = r.latitude, lng = r.longitude;
-      if (lat == null || lng == null) continue;
+      // 座標が不正（null / 非数 / 0,0 / 日本国外）の投稿は地図に載せない
+      //（0,0 が混入すると fitBounds が西アフリカ沖まで広がり、大阪のピンとタイルが見えなくなるため）
+      if (!isValidLatLng(lat, lng)) continue;
       out.push({
         id: r.artwork_id, s: r.sentence || "", n: r.account_name || "",
         g: r.gender || "", a: r.age_group || "", t: r.post_dated_at || "",
