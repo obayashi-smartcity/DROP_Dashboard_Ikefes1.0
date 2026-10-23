@@ -50,7 +50,7 @@
   .eyebrow{font-size:10.5px;letter-spacing:2px;color:var(--rich);font-weight:800;text-transform:uppercase}
 
   /* ---------- Filter bar ---------- */
-  .filters{background:var(--card);border:1px solid var(--stroke-soft);padding:14px 16px;display:flex;flex-wrap:wrap;gap:14px 26px;align-items:flex-end;margin-bottom:18px}
+  .filters{background:var(--card);border:1px solid var(--stroke-soft);padding:14px 16px;margin-bottom:18px}
   .f-group{display:flex;flex-direction:column;gap:7px;min-width:0}
   .f-title{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);font-weight:800}
   .search{position:relative}
@@ -63,7 +63,7 @@
   .chip.on{background:var(--rich-soft);color:var(--rich);border-color:var(--rich);font-weight:700}
   .chip span{opacity:.55;margin-left:3px;font-variant-numeric:tabular-nums}
   select.sel{border:1px solid var(--stroke);background:#fff;font:12.5px var(--font);padding:7px 10px;color:var(--text)}
-  .f-foot{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted)}
+  .f-foot{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);white-space:nowrap}
   .f-foot b{color:var(--rich);font-size:15px;font-variant-numeric:tabular-nums}
 
   /* ---------- Post grid ---------- */
@@ -120,6 +120,7 @@
   .target .media img{width:100%;height:100%;object-fit:cover;display:block}
   .target .tb{padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px}
   .target .tname{font-size:15px;font-weight:900}
+  .target .ttext-wrap{padding:0 18px 18px}
   .target .ttext{font-size:12.5px;line-height:1.75;color:var(--text);white-space:pre-wrap;max-height:180px;overflow:auto;background:var(--bg);padding:10px 12px}
   .kv{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--stroke-soft)}
   .kv div{padding:10px 10px 9px;border-right:1px solid var(--stroke-soft)}
@@ -183,23 +184,32 @@
   .gtag.lk{background:var(--rich-soft);color:var(--rich)} .gtag.pv{background:var(--pv-soft);color:var(--pv)}
   .ref-foot{font-size:11px;color:var(--dim);margin-top:10px}
 
-  /* prompt / few-shot */
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  /* prompt */
   .lbl{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--rich);font-weight:800;margin-bottom:8px;display:flex;align-items:baseline;gap:8px}
   .lbl span{color:var(--dim);font-weight:500;letter-spacing:0;text-transform:none}
   .presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-  .shots{display:flex;flex-direction:column;gap:10px}
-  .shot{border:1px solid var(--stroke-soft);background:var(--bg);padding:10px 12px}
-  .shot-h{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;color:var(--muted);margin-bottom:6px}
-  .shot-h button{border:none;background:none;color:var(--dim);cursor:pointer;font-size:11px;text-decoration:underline}
-  .shot-h button:hover{color:var(--err)}
-  .shot .io{display:grid;grid-template-columns:1fr 18px 1fr;gap:6px;align-items:start}
-  .shot .arrow{color:var(--rich);padding-top:24px;text-align:center}
-  .shot small{display:block;font-size:10px;color:var(--dim);margin-bottom:4px;font-weight:700}
-  .shot textarea{min-height:68px;background:#fff}
-  .add-shot{border:1px dashed var(--stroke);background:#fff;color:var(--muted);font:12px var(--font);padding:9px;cursor:pointer;width:100%}
-  .add-shot:hover{border-color:var(--rich);color:var(--rich)}
-  .add-shot:disabled{opacity:.5;cursor:not-allowed}
+
+  /* collapsible（details） */
+  .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;-webkit-tap-highlight-color:transparent}
+  .fold>summary::-webkit-details-marker{display:none}
+  .fold>summary .chev{width:8px;height:8px;border-right:2px solid var(--rich);border-bottom:2px solid var(--rich);transform:rotate(-45deg);transition:transform .15s;flex:none;margin-right:2px}
+  .fold[open]>summary .chev{transform:rotate(45deg)}
+  .fold-state{margin-left:auto;font-size:11px;font-weight:700;color:var(--dim);white-space:nowrap}
+  .fold-state.on{color:var(--rich);background:var(--rich-soft);padding:2px 8px}
+  /* Step1 詳細フィルタ */
+  .f-top{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap}
+  .f-more{border-top:1px solid var(--stroke-soft);margin-top:12px;padding-top:10px}
+  .f-more>summary{font-size:12px;font-weight:800;color:var(--muted);padding:2px 0}
+  .f-more>summary:hover{color:var(--text)}
+  .f-more-body{display:flex;flex-wrap:wrap;gap:14px 26px;align-items:flex-end;padding-top:12px}
+  /* Step2 追加の指示 */
+  .panel.fold-panel{padding:0}
+  .fold-panel>summary{padding:16px 20px}
+  .fold-panel>summary h2{margin:0;font-size:15px;font-weight:900;display:flex;align-items:center;gap:10px}
+  .fold-panel>summary h2 .n{font-family:var(--font-display);font-size:11px;color:#fff;background:var(--rich);padding:3px 7px;letter-spacing:.5px}
+  .fold-body{padding:0 20px 18px;border-top:1px solid var(--stroke-soft)}
+  .fold-body .lbl{margin-top:14px}
+  .login .remember{font-size:11px;color:var(--dim);flex-basis:100%}
   .hint{font-size:11px;color:var(--dim);margin-top:10px;line-height:1.6}
   kbd{font:10.5px var(--font);border:1px solid var(--stroke);background:#fff;padding:0 4px}
 
@@ -294,26 +304,115 @@
     .target{position:static}
     .rgrid,.two{grid-template-columns:1fr}
   }
+  /* ===== スマホ（iPhone SE 第3世代 375×667 を基準） ===== */
   @media (max-width:720px){
-    .appbar-in{flex-wrap:wrap;gap:12px;padding:12px 16px}
+    html,body{font-size:13px}
+    .appbar-in{padding:10px 14px;gap:10px;flex-wrap:nowrap}
+    .brand{font-size:16px}
+    .brand small{display:none}
     .appbar-meta{display:none}
-    .stepper{width:100%;flex:1 1 100%}
-    .step-line{flex:1 1 20px;margin:0 8px}
-    .step-tab{font-size:12px}
-    .f-group{width:100%}
-    .dock-in{margin:0 0 0;gap:10px}
-    main{padding:20px 16px 120px}
-    .goals{grid-template-columns:1fr}
-    .search input{width:100%}
+    .stepper{justify-content:flex-end}
+    .step-line{flex:0 1 18px;margin:0 6px}
+    .step-tab{font-size:11.5px;gap:6px;padding:4px 2px}
+    .step-tab b{width:22px;height:22px;font-size:10px}
+    .step-tab .lt{display:none}
+    .step-tab.active .lt{display:inline}
+    main{padding:14px 12px calc(96px + env(safe-area-inset-bottom))}
+    .page-head{margin-bottom:12px;gap:10px;align-items:flex-start;flex-wrap:nowrap}
+    .page-head h1{font-size:19px}
+    .page-head p{font-size:12px;line-height:1.6}
+    #step2 .page-head p{display:none}
+    #backBtn{padding:8px 10px;font-size:11.5px;flex:none}
+    #backBtn .bt{display:none}
+
+    /* Step1 */
+    .filters{padding:10px 12px;margin-bottom:12px}
+    .f-top{gap:8px}
+    .f-top .f-group{flex:1 1 100%}
+    .f-top .f-title{display:none}
     .search{width:100%}
-    .f-foot{margin-left:0}
+    .search input{width:100%;font-size:16px;padding:9px 10px 9px 32px}
+    .f-foot{margin-left:0;width:100%;justify-content:space-between}
+    .f-more{margin-top:10px;padding-top:8px}
+    .f-more .fx{display:none}
+    .f-more-body{gap:12px;padding-top:10px}
+    .f-more-body .f-group{width:100%}
+    select.sel{width:100%;font-size:16px;padding:8px 10px}
+    .chip{padding:7px 10px;font-size:12px}
+    .grid{grid-template-columns:1fr 1fr;gap:8px}
+    .pcard:hover{transform:none;box-shadow:none}
+    .pcard .check{top:6px;right:6px;width:22px;height:22px}
+    .pcard .body{padding:8px 9px 10px;gap:5px}
+    .pcard .name{font-size:12px}
+    .pcard .text{font-size:11px;-webkit-line-clamp:2;min-height:0;line-height:1.5}
+    .pcard .badges{display:none}
+    .pcard .pdate{display:none}
+    .metrics{gap:10px;font-size:11.5px}
+    .dock-in{margin:0;padding:8px 10px calc(8px + env(safe-area-inset-bottom));gap:10px}
+    .dock img,.dock .ph0{width:40px!important;height:40px!important}
+    .dock .d-text{display:none}
+    .dock .d-name{font-size:12.5px}
+    #toStep2{padding:10px 14px;font-size:12.5px}
+
+    /* Step2 */
+    :root{--gap:12px}
+    .target{display:grid;grid-template-columns:96px 1fr;border-top-width:3px}
+    .target .media{aspect-ratio:auto;height:100%;min-height:96px}
+    .target .tb{padding:10px 12px;gap:7px}
+    .target .tb .eyebrow,.target .tb .badges,.target .tmeta{display:none}
+    .target .tname{font-size:13.5px}
+    .target .ttext{grid-column:1/-1;font-size:12px;max-height:120px;padding:8px 10px;margin:0 0 0}
+    .target .ttext-wrap{grid-column:1/-1;padding:0 12px 12px}
+    .kv div{padding:6px 6px 5px}
+    .kv b{font-size:17px}
+    .kv small,.kv em{font-size:9.5px}
+    .panel{padding:14px 12px}
+    .ph{margin-bottom:10px}
+    .ph h2{font-size:14px}
+    .ph .sub{font-size:10.5px;flex-basis:100%}
+    .goals{grid-template-columns:1fr 1fr 1fr;gap:6px}
+    .goal{flex-direction:column;align-items:center;text-align:center;padding:10px 4px;gap:6px}
+    .goal .gi{width:30px;height:30px}
+    .goal b{font-size:12px}
+    .goal small{display:none}
+    textarea.ta{font-size:16px}
+    .ref-tools{gap:10px;font-size:11.5px}
+    .num{font-size:16px;width:54px}
+    .ref{grid-template-columns:20px 40px 1fr auto;gap:8px;padding:8px 2px}
+    .ref .rk{display:none}
+    .ref img,.ref .ph0{width:40px;height:40px}
+    .ref .rt{font-size:11px}
+    .ref .rv b{font-size:15px}
+    .ref .rv span{display:none}
+    .ref-foot{font-size:10.5px}
+    .fold-panel>summary{padding:14px 12px}
+    .fold-panel>summary h2{font-size:14px}
+    .fold-body{padding:0 12px 14px}
+    .hint .pc{display:none}
+    .runbar{gap:10px}
+    .runbar .btn.lg{width:100%;justify-content:center;padding:14px}
+    .run-note{min-width:0;font-size:11px}
+    .login{flex-direction:column;align-items:stretch;gap:6px}
+    .login input{min-width:0;width:100%;font-size:16px}
+    .login .btn{justify-content:center;margin-top:4px}
+
+    /* 結果 */
+    .headline{font-size:15px;padding:12px 14px;margin-bottom:14px}
+    .rgrid{grid-template-columns:1fr;gap:10px;margin-bottom:16px}
+    .rcard{padding:12px}
+    .act{grid-template-columns:26px 1fr;gap:10px;padding:12px}
+    .act-no{font-size:20px}
+    .act-t{font-size:13px}
     .rw-cols{grid-template-columns:1fr}
     .rw-col+.rw-col{border-left:none;border-top:1px solid var(--stroke-soft)}
-    .shot .io{grid-template-columns:1fr}
-    .shot .arrow{display:none}
-    .modal-in{grid-template-columns:1fr}
-    .ref{grid-template-columns:20px 24px 40px 1fr auto;gap:8px}
-    .ref img,.ref .ph0{width:40px;height:40px}
+    .rw-col{padding:12px}
+
+    /* モーダル */
+    .modal{padding:0;align-items:flex-end}
+    .modal-in{grid-template-columns:1fr;max-height:92vh;overflow:auto}
+    .modal-media{min-height:0;max-height:45vh}
+    .modal-media img{max-height:45vh}
+    .modal-body{padding:16px;overflow:visible}
   }
 </style>
 </head>
@@ -324,9 +423,9 @@
   <div class="appbar-in">
     <div class="brand">DROP<i>.</i> Coach<small>POST IMPROVEMENT</small></div>
     <nav class="stepper" aria-label="ステップ">
-      <button type="button" class="step-tab active" id="tab1"><b>01</b>投稿を選ぶ</button>
+      <button type="button" class="step-tab active" id="tab1"><b>01</b><span class="lt">投稿を選ぶ</span></button>
       <span class="step-line"></span>
-      <button type="button" class="step-tab" id="tab2" disabled><b>02</b>目的を決めて分析</button>
+      <button type="button" class="step-tab" id="tab2" disabled><b>02</b><span class="lt">目的を決めて分析</span></button>
     </nav>
     <div class="appbar-meta">
       <span>データ更新 <b id="metaUpdated">–</b></span>
@@ -347,28 +446,35 @@
     </div>
 
     <div class="filters">
-      <div class="f-group">
-        <div class="f-title">ユーザー名</div>
-        <label class="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-          <input type="search" id="fName" list="nameList" placeholder="例）ABC本社ビル" autocomplete="off" />
-          <datalist id="nameList"></datalist>
-        </label>
+      <div class="f-top">
+        <div class="f-group">
+          <div class="f-title">ユーザー名</div>
+          <label class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input type="search" id="fName" list="nameList" placeholder="ユーザー名で検索（例：ABC本社ビル）" autocomplete="off" enterkeyhint="search" />
+            <datalist id="nameList"></datalist>
+          </label>
+        </div>
+        <div class="f-foot">
+          <span><b id="fCount">0</b> 件 / 全 <span id="fTotal">0</span> 件</span>
+          <button type="button" class="link-btn" id="fReset">条件をクリア</button>
+        </div>
       </div>
-      <div class="f-group"><div class="f-title">性別</div><div class="chips" id="fGender"></div></div>
-      <div class="f-group"><div class="f-title">年齢層</div><div class="chips" id="fAge"></div></div>
-      <div class="f-group">
-        <div class="f-title">並び順</div>
-        <select class="sel" id="fSort">
-          <option value="new">投稿日が新しい順</option>
-          <option value="like">いいねが多い順</option>
-          <option value="pv">PVが多い順</option>
-        </select>
-      </div>
-      <div class="f-foot">
-        <span><b id="fCount">0</b> 件 / 全 <span id="fTotal">0</span> 件</span>
-        <button type="button" class="link-btn" id="fReset">条件をクリア</button>
-      </div>
+      <details class="fold f-more" id="fMore">
+        <summary><span class="chev"></span>詳細フィルタ<span class="fx">（性別・年齢層・並び順）</span><span class="fold-state" id="fMoreState">未設定</span></summary>
+        <div class="f-more-body">
+          <div class="f-group"><div class="f-title">性別</div><div class="chips" id="fGender"></div></div>
+          <div class="f-group"><div class="f-title">年齢層</div><div class="chips" id="fAge"></div></div>
+          <div class="f-group">
+            <div class="f-title">並び順</div>
+            <select class="sel" id="fSort">
+              <option value="new">投稿日が新しい順</option>
+              <option value="like">いいねが多い順</option>
+              <option value="pv">PVが多い順</option>
+            </select>
+          </div>
+        </div>
+      </details>
     </div>
 
     <div class="grid" id="postGrid"><div class="empty"><b>読み込み中…</b>投稿データを取得しています</div></div>
@@ -383,7 +489,7 @@
         <p>目的に合った上位投稿を参考に、選んだ投稿の具体的な改善案を AI が提示します。</p>
       </div>
       <button type="button" class="btn ghost" id="backBtn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H6"/><path d="M11 6l-6 6 6 6"/></svg>投稿を選び直す
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H6"/><path d="M11 6l-6 6 6 6"/></svg><span class="bt">投稿を選び直す</span>
       </button>
     </div>
 
@@ -426,24 +532,17 @@
           <div class="ref-foot">チェックを外した投稿は AI に送りません。選択中の投稿とテスト投稿は除外しています。行をクリックで詳細表示。</div>
         </div>
 
-        <!-- 追加指示・Few-shot -->
-        <div class="panel">
-          <div class="ph"><h2><span class="n">C</span>追加の指示・Few-shot</h2><span class="sub" id="optState">任意</span></div>
-          <div class="two">
-            <div>
-              <div class="lbl">追加の指示<span>プロンプトに追記されます</span></div>
-              <div class="presets" id="presets"></div>
-              <textarea class="ta" id="instr" rows="6" maxlength="400" placeholder="例）イケフェスのガイドツアーへの誘導を意識した文章にしてください。絵文字は使わないでください。"></textarea>
-              <div class="cnt" id="instrCnt">0 / 400</div>
-            </div>
-            <div>
-              <div class="lbl">Few-shot 例<span>入力と期待する出力の例（最大 3 件）</span></div>
-              <div class="shots" id="shots"></div>
-              <button type="button" class="add-shot" id="addShot">＋ 例を追加</button>
-            </div>
+        <!-- 追加の指示（展開式） -->
+        <details class="panel fold fold-panel" id="instrFold">
+          <summary><span class="chev"></span><h2><span class="n">C</span>追加の指示</h2><span class="fold-state" id="optState">任意</span></summary>
+          <div class="fold-body">
+            <div class="lbl">よく使う指示<span>タップで追加／解除</span></div>
+            <div class="presets" id="presets"></div>
+            <textarea class="ta" id="instr" rows="5" maxlength="400" placeholder="例）イケフェスのガイドツアーへの誘導を意識した文章にしてください。絵文字は使わないでください。"></textarea>
+            <div class="cnt" id="instrCnt">0 / 400</div>
+            <div class="hint">入力内容はこのブラウザに保存され、プロンプトに追記されます。次に「改善案を生成」を押したときに反映されます<span class="pc">（入力欄で <kbd>Ctrl</kbd>+<kbd>Enter</kbd> でも実行）</span>。</div>
           </div>
-          <div class="hint">入力内容はこのブラウザに保存され、次に「改善案を生成」を押したときに反映されます（入力欄で <kbd>Ctrl</kbd>+<kbd>Enter</kbd> でも実行）。</div>
-        </div>
+        </details>
 
         <!-- 実行 -->
         <div class="panel" style="border-top:3px solid var(--rich)">
@@ -453,7 +552,7 @@
               <span id="runLabel">改善案を生成</span>
             </button>
             <div class="run-note" id="runNote">–</div>
-            <div class="run-side"><button type="button" class="link-btn" id="forceBtn" hidden title="キャッシュを使わずに再生成します">再生成</button></div>
+            <div class="run-side"><button type="button" class="link-btn" id="forceBtn" hidden title="キャッシュを使わずに再生成します">再生成</button><span id="userBox2" hidden><b id="userName2">–</b> <button type="button" class="link-btn" id="logoutBtn2">ログアウト</button></span></div>
           </div>
           <form class="login" id="login" hidden autocomplete="on">
             <label for="lName">Name</label>
@@ -462,6 +561,7 @@
             <input type="password" id="lPw" autocomplete="current-password" required />
             <button type="submit" class="btn" id="loginBtn">認証して実行</button>
             <span class="err" id="loginErr"></span>
+            <span class="remember">Name とパスワードはこの端末のブラウザに保存され、次回から自動でログインします（ログアウトで削除）。</span>
           </form>
           <div class="status" id="status" hidden></div>
         </div>
@@ -472,7 +572,7 @@
           <div class="result" id="result">
             <div class="placeholder"><b>まだ分析していません</b>目的と参考投稿を確認して「改善案を生成」を押してください。</div>
           </div>
-          <div class="note">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、および入力した目的・追加指示・Few-shot 例のみで、アカウント ID・画像・位置情報は送信しません。実行のたびに Name・目的・追加指示を記録します。</div>
+          <div class="note">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、および入力した目的・追加指示のみで、アカウント ID・画像・位置情報は送信しません。実行のたびに Name・目的・追加指示を記録します。</div>
         </div>
       </div>
     </div>
@@ -524,13 +624,11 @@ const CONFIG = {
   MAX_TEXT: 300,            // 本文の送信文字数上限（GAS 側 MAX_TEXT と合わせる）
   MAX_INSTR: 400,           // 追加指示の上限
   MAX_GOAL: 200,            // 「その他の目的」の上限
-  MAX_SHOTS: 3,             // Few-shot の件数上限
-  MAX_SHOT_TEXT: 400,       // Few-shot 1 欄あたりの上限
   REF_N: 5, REF_N_MIN: 1, REF_N_MAX: 10,
   SEND_NAME: true,          // 投稿者表示名も送る（施設アカウント中心のため既定 ON）
   EXCLUDE: /^[\s　]*(テスト[\s　]*)+$/,
   PRESETS: ["改善後の本文例を必ず出す", "絵文字を使わない", "120字以内にまとめる", "ガイドツアーへ誘導する"],
-  KEYS: { TOKEN: "dropCoachToken", LOG_TOKEN: "dropCoachLogToken", NAME: "dropCoachName", PREFS: "dropCoachPrefs" }
+  KEYS: { TOKEN: "dropCoachToken", LOG_TOKEN: "dropCoachLogToken", NAME: "dropCoachName", PW: "dropCoachPw", PREFS: "dropCoachPrefs" }
 };
 
 /* ---------- 共通 ---------- */
@@ -558,7 +656,7 @@ const S = {
   f: { name: "", genders: new Set(), ages: new Set(), sort: "new" },
   selectedId: null, step: 1,
   goal: "pv", goalNote: "", refN: CONFIG.REF_N, refFilter: false, refOff: new Set(),
-  instr: "", shots: [],
+  instr: "",
   busy: false, lastKey: null, idMap: {}, pendingForce: false, timer: null
 };
 
@@ -615,7 +713,7 @@ const passFilter = p => {
 
 /* ---------- 設定の保存 ---------- */
 function savePrefs() {
-  try { localStorage.setItem(CONFIG.KEYS.PREFS, JSON.stringify({ goal: S.goal, goalNote: S.goalNote, refN: S.refN, refFilter: S.refFilter, instr: S.instr, shots: S.shots })); } catch (e) {}
+  try { localStorage.setItem(CONFIG.KEYS.PREFS, JSON.stringify({ goal: S.goal, goalNote: S.goalNote, refN: S.refN, refFilter: S.refFilter, instr: S.instr, instrOpen: $("instrFold").open, fMoreOpen: $("fMore").open })); } catch (e) {}
 }
 function loadPrefs() {
   try {
@@ -626,7 +724,8 @@ function loadPrefs() {
     S.refN = clampN(p.refN);
     S.refFilter = !!p.refFilter;
     S.instr = String(p.instr || "").slice(0, CONFIG.MAX_INSTR);
-    S.shots = (Array.isArray(p.shots) ? p.shots : []).slice(0, CONFIG.MAX_SHOTS).map(s => ({ input: String(s.input || ""), output: String(s.output || "") }));
+    $("instrFold").open = !!p.instrOpen;
+    $("fMore").open = !!p.fMoreOpen;
   } catch (e) {}
 }
 function clampN(v) { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(CONFIG.REF_N_MAX, Math.max(CONFIG.REF_N_MIN, n)) : CONFIG.REF_N; }
@@ -651,6 +750,8 @@ function buildFilters() {
   const names = [...new Set(POSTS.map(p => p.n).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
   $("nameList").innerHTML = names.map(n => `<option value="${esc(n)}"></option>`).join("");
   $("fName").addEventListener("input", () => { S.f.name = $("fName").value; renderGrid(); });
+  $("fName").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+  $("fMore").addEventListener("toggle", savePrefs);
   $("fSort").addEventListener("change", () => { S.f.sort = $("fSort").value; renderGrid(); });
   $("fReset").addEventListener("click", () => {
     S.f.name = ""; S.f.genders.clear(); S.f.ages.clear(); S.f.sort = "new";
@@ -659,7 +760,13 @@ function buildFilters() {
     renderGrid();
   });
 }
+function syncFilterState() {
+  const on = [S.f.genders.size && `性別 ${S.f.genders.size}`, S.f.ages.size && `年齢層 ${S.f.ages.size}`, S.f.sort !== "new" && "並び順"].filter(Boolean);
+  $("fMoreState").textContent = on.length ? on.join("・") + " を適用中" : "未設定";
+  $("fMoreState").classList.toggle("on", !!on.length);
+}
 function renderGrid() {
+  syncFilterState();
   const list = POSTS.filter(passFilter);
   const sorters = {
     new: (a, b) => (b.t > a.t ? 1 : b.t < a.t ? -1 : 0),
@@ -745,8 +852,8 @@ function renderTarget() {
         <div><small>いいね率</small><b>${rate}</b><em>全体 ${STATS.avgRate}%</em></div>
       </div>
       <div class="tmeta"><span>${esc(p.t)}</span><span>平均 いいね ${STATS.avgLike} ・ PV ${STATS.avgPv}</span></div>
-      <div class="ttext">${esc(p.s)}</div>
-    </div>`;
+    </div>
+    <div class="ttext-wrap"><div class="ttext">${esc(p.s)}</div></div>`;
   $("tMedia").addEventListener("click", () => openModal(p));
 }
 function renderGoal() {
@@ -822,7 +929,7 @@ $("refN").addEventListener("change", () => { S.refN = clampN($("refN").value); S
 $("refN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("refN").dispatchEvent(new Event("change")); } });
 $("refFilter").addEventListener("change", () => { S.refFilter = $("refFilter").checked; S.refOff.clear(); savePrefs(); renderRefs(); checkStale(); });
 
-/* ---------- 追加指示・Few-shot ---------- */
+/* ---------- 追加指示 ---------- */
 function initPrompt() {
   $("instr").value = S.instr;
   $("presets").innerHTML = CONFIG.PRESETS.map(t => `<button type="button" class="chip" data-preset="${esc(t)}">${esc(t)}</button>`).join("");
@@ -836,42 +943,13 @@ function initPrompt() {
   }));
   $("instr").addEventListener("input", () => { S.instr = $("instr").value; syncPresets(); syncCnt(); });
   $("instr").addEventListener("change", () => { savePrefs(); checkStale(); });
-  syncPresets(); syncCnt(); renderShots();
-  $("addShot").addEventListener("click", () => {
-    if (S.shots.length >= CONFIG.MAX_SHOTS) return;
-    S.shots.push({ input: "", output: "" }); savePrefs(); renderShots();
-    const tas = $("shots").querySelectorAll("textarea"); if (tas.length) tas[tas.length - 2].focus();
-  });
+  syncPresets(); syncCnt();
+  $("instrFold").addEventListener("toggle", savePrefs);
 }
-function renderShots() {
-  $("shots").innerHTML = S.shots.map((s, i) => `
-    <div class="shot" data-i="${i}">
-      <div class="shot-h"><span>例 ${i + 1}</span><button type="button" data-del="${i}">削除</button></div>
-      <div class="io">
-        <div><small>入力（改善前の本文・状況）</small><textarea class="ta" data-k="input" maxlength="${CONFIG.MAX_SHOT_TEXT}" placeholder="例）ABC本社ビルの大階段です">${esc(s.input)}</textarea></div>
-        <div class="arrow">→</div>
-        <div><small>期待する出力（改善例）</small><textarea class="ta" data-k="output" maxlength="${CONFIG.MAX_SHOT_TEXT}" placeholder="例）隈研吾デザインの大階段。壁の市松模様は障子がモチーフ。ツアーで実物をぜひ！">${esc(s.output)}</textarea></div>
-      </div>
-    </div>`).join("");
-  $("shots").querySelectorAll(".shot").forEach(box => {
-    const i = +box.dataset.i;
-    box.querySelectorAll("textarea").forEach(ta => {
-      ta.addEventListener("input", () => { S.shots[i][ta.dataset.k] = ta.value; syncOptState(); });
-      ta.addEventListener("change", () => { savePrefs(); checkStale(); });
-      ta.addEventListener("keydown", ctrlEnter);
-    });
-    box.querySelector("[data-del]").addEventListener("click", () => { S.shots.splice(i, 1); savePrefs(); renderShots(); checkStale(); });
-  });
-  $("addShot").disabled = S.shots.length >= CONFIG.MAX_SHOTS;
-  $("addShot").textContent = S.shots.length >= CONFIG.MAX_SHOTS ? `例は最大 ${CONFIG.MAX_SHOTS} 件です` : "＋ 例を追加";
-  syncOptState();
-}
-function validShots() { return S.shots.map(s => ({ input: s.input.trim().slice(0, CONFIG.MAX_SHOT_TEXT), output: s.output.trim().slice(0, CONFIG.MAX_SHOT_TEXT) })).filter(s => s.output); }
 function syncOptState() {
-  const on = [S.instr.trim() && "追加指示", validShots().length && `Few-shot ${validShots().length} 件`].filter(Boolean);
-  $("optState").textContent = on.length ? on.join("・") + " を反映" : "任意";
-  $("optState").style.color = on.length ? "var(--rich)" : "";
-  $("optState").style.fontWeight = on.length ? "800" : "";
+  const on = !!S.instr.trim();
+  $("optState").textContent = on ? "反映中" : "任意";
+  $("optState").classList.toggle("on", on);
 }
 function ctrlEnter(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); savePrefs(); run(false); } }
 ["instr", "goalNote"].forEach(id => $(id).addEventListener("keydown", ctrlEnter));
@@ -889,6 +967,34 @@ function setToken(token, sec, key) { localStorage.setItem(key, JSON.stringify({ 
 function loggedIn() { return !!getToken(CONFIG.KEYS.TOKEN) && (!logEnabled() || !!getToken(CONFIG.KEYS.LOG_TOKEN)); }
 function clearTokens() { localStorage.removeItem(CONFIG.KEYS.TOKEN); localStorage.removeItem(CONFIG.KEYS.LOG_TOKEN); syncButtons(); }
 function getName() { try { return localStorage.getItem(CONFIG.KEYS.NAME) || ""; } catch (e) { return ""; } }
+/* Name・パスワードをこのブラウザに保存（パスワードは平文で localStorage に入る点に注意。ログアウトで削除） */
+function getCreds() {
+  try { const n = localStorage.getItem(CONFIG.KEYS.NAME) || "", pw = localStorage.getItem(CONFIG.KEYS.PW) || ""; return n && pw ? { name: n, pw } : null; } catch (e) { return null; }
+}
+function saveCreds(name, pw) { try { localStorage.setItem(CONFIG.KEYS.NAME, name); localStorage.setItem(CONFIG.KEYS.PW, pw); } catch (e) {} }
+function clearPw() { try { localStorage.removeItem(CONFIG.KEYS.PW); } catch (e) {} }
+/* 認証（分析用・ログ用を並行）。成功で true、失敗時はメッセージ文字列 */
+async function doLogin(name, pw) {
+  const [res, logRes] = await Promise.all([
+    post({ action: "login", name, password: pw }, CONFIG.GAS_URL),
+    logEnabled() ? post({ action: "login", name, password: pw }, CONFIG.LOG_URL) : Promise.resolve(null)
+  ]);
+  if (!res.ok) return { ok: false, code: res.code, message: res.message || "認証に失敗しました" };
+  setToken(res.token, res.expires_in, CONFIG.KEYS.TOKEN);
+  if (logRes && !logRes.ok) return { ok: false, code: logRes.code, message: "ログ記録用の認証に失敗しました：" + (logRes.message || "不明なエラー") };
+  if (logRes) setToken(logRes.token, logRes.expires_in, CONFIG.KEYS.LOG_TOKEN);
+  return { ok: true };
+}
+/* 保存済みの Name・パスワードで自動ログイン。成功で true */
+async function autoLogin() {
+  const c = getCreds(); if (!c) return false;
+  status('<span class="spin"></span><span>保存済みの情報でログインしています…</span>');
+  const r = await doLogin(c.name, c.pw);
+  if (r.ok) { status(""); syncButtons(); return true; }
+  if (r.code === "AUTH") clearPw();   // パスワード変更時などは保存分を破棄
+  S.authMsg = r.message;
+  return false;
+}
 
 async function post(body, url) {
   const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
@@ -930,9 +1036,8 @@ function buildPayload() {
   };
   const target = toPayloadPost(p, "T", {});
   const instructions = S.instr.replace(/\r\n?/g, "\n").trim().slice(0, CONFIG.MAX_INSTR);
-  const fewshots = validShots();
-  return { goal, context, target, references, instructions, fewshots, idMap,
-    key: JSON.stringify([p.id, goal, context, references.map(r => [idMap[r.id], r.like, r.pv]), instructions, fewshots]) };
+  return { goal, context, target, references, instructions, idMap,
+    key: JSON.stringify([p.id, goal, context, references.map(r => [idMap[r.id], r.like, r.pv]), instructions]) };
 }
 
 function status(html, cls) { const st = $("status"); st.className = "status" + (cls ? " " + cls : ""); st.innerHTML = html; st.hidden = !html; }
@@ -942,6 +1047,7 @@ function syncButtons() {
   $("forceBtn").disabled = S.busy; $("loginBtn").disabled = S.busy;
   const li = loggedIn();
   $("userBox").hidden = !li; $("userName").textContent = getName() || "–";
+  $("userBox2").hidden = !li; $("userName2").textContent = getName() || "–";
   if (!configured(CONFIG.GAS_URL)) status("GAS の URL が未設定です（CONFIG.GAS_URL）", "error");
 }
 function syncRunNote() {
@@ -951,8 +1057,9 @@ function syncRunNote() {
   $("runNote").innerHTML = `目的 <b style="color:var(--rich)">${esc(goal)}</b> ・ 参考投稿 <b style="color:var(--rich)">${n}</b> 件で、選択した投稿の改善案を作成します。`;
 }
 function showLogin(msg) {
-  $("login").hidden = false; $("loginErr").textContent = msg || ""; $("lPw").value = "";
+  $("login").hidden = false; $("loginErr").textContent = msg || "";
   if (!$("lName").value) $("lName").value = getName();
+  $("lPw").value = (getCreds() || {}).pw || "";
   ($("lName").value ? $("lPw") : $("lName")).focus();
 }
 
@@ -960,7 +1067,12 @@ async function run(force) {
   if (S.busy || S.step !== 2) return;
   savePrefs();
   if (S.goal === "other" && !S.goalNote.trim()) { status("「その他の目的」の内容を入力してください", "error"); $("goalNote").focus(); return; }
-  if (!loggedIn()) { S.pendingForce = !!force; showLogin(""); status("Name とパスワードを入力してください"); return; }
+  if (!loggedIn()) {
+    S.busy = true; syncButtons();
+    const ok = await autoLogin();
+    S.busy = false; syncButtons();
+    if (!ok) { S.pendingForce = !!force; showLogin(S.authMsg || ""); S.authMsg = ""; status("Name とパスワードを入力してください"); return; }
+  }
   const pl = buildPayload();
   if (!pl.references.length) { status("参考投稿が 0 件です。件数や絞り込み条件を見直してください", "error"); return; }
   S.busy = true; syncButtons();
@@ -970,18 +1082,23 @@ async function run(force) {
   S.timer = setInterval(() => { const s = $("sec"); if (s) s.textContent = Math.floor((Date.now() - t0) / 1000); }, 250);
   // ログと分析を並行送信。ログの成否は分析を止めない
   const logP = logEnabled()
-    ? post({ action: "log", token: getToken(CONFIG.KEYS.LOG_TOKEN), goal: pl.goal.label, goal_note: pl.goal.note, target_id: pl.idMap.T, ref_count: pl.references.length, instructions: pl.instructions, fewshot_count: pl.fewshots.length }, CONFIG.LOG_URL)
+    ? post({ action: "log", token: getToken(CONFIG.KEYS.LOG_TOKEN), goal: pl.goal.label, goal_note: pl.goal.note, target_id: pl.idMap.T, ref_count: pl.references.length, instructions: pl.instructions }, CONFIG.LOG_URL)
     : Promise.resolve({ ok: true });
-  const res = await post({ action: "coach", token: getToken(CONFIG.KEYS.TOKEN), goal: pl.goal, context: pl.context, target: pl.target, references: pl.references, instructions: pl.instructions, fewshots: pl.fewshots, force: !!force }, CONFIG.GAS_URL);
+  const res = await post({ action: "coach", token: getToken(CONFIG.KEYS.TOKEN), goal: pl.goal, context: pl.context, target: pl.target, references: pl.references, instructions: pl.instructions, force: !!force }, CONFIG.GAS_URL);
   const logRes = await logP;
   clearInterval(S.timer); S.busy = false;
   if (!logRes.ok && logRes.code === "AUTH") localStorage.removeItem(CONFIG.KEYS.LOG_TOKEN);
   syncButtons(); $("result").classList.remove("loading");
   const logWarn = logRes.ok ? "" : `<span class="warn">※ 実行ログを記録できませんでした（${esc(logRes.message || "不明なエラー")}）</span>`;
   if (!res.ok) {
-    if (res.code === "AUTH") { clearTokens(); S.pendingForce = !!force; showLogin(res.message); status(logWarn); return; }
+    if (res.code === "AUTH") {
+      clearTokens();
+      if (!S.retried && getCreds()) { S.retried = true; return run(force); }   // 期限切れ → 保存情報で 1 回だけ再ログインして再実行
+      S.pendingForce = !!force; showLogin(res.message); status(logWarn); return;
+    }
     status(esc(res.message || "生成に失敗しました"), "error"); $("forceBtn").hidden = false; return;
   }
+  S.retried = false;
   S.lastKey = pl.key; S.idMap = pl.idMap;
   renderResult(res.result, pl);
   const sec = ((Date.now() - t0) / 1000).toFixed(1);
@@ -1005,7 +1122,7 @@ function renderResult(r, pl) {
   const LV = { "低": 1, "中": 2, "高": 3 };
   const meter = (label, v) => { const n = LV[v] || 0; return n ? `<span class="meter">${label}<s>${[1, 2, 3].map(i => `<u class="${i <= n ? "on" : ""}"></u>`).join("")}</s>${esc(v)}</span>` : ""; };
   const d = r.diagnosis || {}, ins = r.reference_insights || {}, rw = r.rewrite || {};
-  const applied = [pl.goal.type === "other" && "目的（自由記述）", pl.instructions && "追加指示", pl.fewshots.length && `Few-shot ${pl.fewshots.length} 件`].filter(Boolean);
+  const applied = [pl.goal.type === "other" && "目的（自由記述）", pl.instructions && "追加指示"].filter(Boolean);
   $("result").innerHTML = `
     <div class="r-meta">目的：${esc(pl.goal.label)}${pl.goal.note ? `（${esc(pl.goal.note)}）` : ""} ・ 参考投稿 ${pl.references.length} 件</div>
     ${r.headline ? `<div class="headline">${esc(r.headline)}</div>` : ""}
@@ -1075,29 +1192,25 @@ function resetResultIfChanged() {
   } else checkStale();
 }
 
-$("runBtn").addEventListener("click", () => run(false));
-$("forceBtn").addEventListener("click", () => run(true));
-$("logoutBtn").addEventListener("click", () => { clearTokens(); status("ログアウトしました"); });
+$("runBtn").addEventListener("click", () => { S.retried = false; run(false); });
+$("forceBtn").addEventListener("click", () => { S.retried = false; run(true); });
+$("logoutBtn").addEventListener("click", () => { clearTokens(); clearPw(); $("lPw").value = ""; status("ログアウトしました（保存したパスワードも削除しました）"); });
 $("login").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("lName").value.replace(/\s+/g, " ").trim().slice(0, 40), pw = $("lPw").value;
   if (!name) { $("loginErr").textContent = "Name を入力してください"; $("lName").focus(); return; }
   if (!pw) return;
-  try { localStorage.setItem(CONFIG.KEYS.NAME, name); } catch (err) {}
   $("lName").value = name;
   S.busy = true; syncButtons(); $("loginErr").textContent = "認証中…";
-  const [res, logRes] = await Promise.all([
-    post({ action: "login", name, password: pw }, CONFIG.GAS_URL),
-    logEnabled() ? post({ action: "login", name, password: pw }, CONFIG.LOG_URL) : Promise.resolve(null)
-  ]);
-  S.busy = false; $("lPw").value = "";
-  if (!res.ok) { syncButtons(); $("loginErr").textContent = res.message || "認証に失敗しました"; $("lPw").focus(); return; }
-  setToken(res.token, res.expires_in, CONFIG.KEYS.TOKEN);
-  if (logRes && !logRes.ok) { syncButtons(); $("loginErr").textContent = "ログ記録用の認証に失敗しました：" + (logRes.message || "不明なエラー"); $("lPw").focus(); return; }
-  if (logRes) setToken(logRes.token, logRes.expires_in, CONFIG.KEYS.LOG_TOKEN);
+  const r = await doLogin(name, pw);
+  S.busy = false; syncButtons();
+  if (!r.ok) { $("loginErr").textContent = r.message; $("lPw").focus(); return; }
+  saveCreds(name, pw);
   $("login").hidden = true; $("loginErr").textContent = ""; syncButtons();
   run(S.pendingForce);
 });
+
+$("logoutBtn2").addEventListener("click", () => $("logoutBtn").click());
 
 /* ---------- モーダル ---------- */
 function openModal(p) {
@@ -1117,6 +1230,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && $("modal")
 /* ---------- 起動 ---------- */
 loadPrefs();
 $("lName").value = getName();
+$("lPw").value = (getCreds() || {}).pw || "";
 initPrompt();
 syncButtons();
 (async () => {
