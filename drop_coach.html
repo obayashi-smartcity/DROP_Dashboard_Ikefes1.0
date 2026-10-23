@@ -566,6 +566,7 @@
           <div class="result" id="result">
             <div class="placeholder"><b>まだ分析していません</b>目的と参考投稿を確認して「改善案を生成」を押してください。</div>
           </div>
+          <div class="status" id="logStatus" hidden></div>
           <div class="note" id="sendNote">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、「画像も解析」が ON のときは投稿画像（このブラウザで長辺 512px に縮小したもの）、および入力した目的・追加指示のみで、アカウント ID・位置情報は送信しません。実行のたびに Name・目的・追加指示・参考投稿の ID・AI の改善提案を記録します。</div>
         </div>
       </div>
@@ -1189,6 +1190,7 @@ async function run(force) {
 ===================================================================== */
 async function sendLog(pl, res, sec, seq) {
   if (!logEnabled()) return;
+  logStatus("");
   const body = {
     action: "log",
     goal: pl.goal.label, goal_note: pl.goal.note,
@@ -1210,15 +1212,21 @@ async function sendLog(pl, res, sec, seq) {
     if (c) {
       const lr = await post({ action: "login", name: c.name, password: c.pw }, CONFIG.LOG_URL);
       if (lr.ok) { setToken(lr.token, lr.expires_in, CONFIG.KEYS.LOG_TOKEN); r = await send(); }
+      else r = lr;
     }
   }
-  if (r.ok) return;
-  console.warn("実行ログを記録できませんでした", r);
   if (seq !== S.runSeq) return;   // 次の実行が始まっていたら表示しない
-  const st = $("status");
-  st.hidden = false;
-  st.insertAdjacentHTML("beforeend", (st.textContent.trim() ? "　" : "") + `<span class="warn">※ 実行ログを記録できませんでした（${esc(r.message || "不明なエラー")}）</span>`);
+  if (r.ok) {
+    console.info("実行ログを記録しました", r);
+    if (res.ok) $("resultMeta").textContent += " ・ ログ記録済み";
+    return;
+  }
+  // 以前は画面上部の #status に追記していたが、直後に結果パネルへスクロールするため気づけなかった。
+  // 結果パネル内の専用欄に、エラーコード付きで残す。
+  console.warn("実行ログを記録できませんでした", r);
+  logStatus(`※ 実行ログを記録できませんでした［${esc(r.code || "?")}］${esc(r.message || "不明なエラー")}`);
 }
+function logStatus(html) { const el = $("logStatus"); el.className = "status" + (html ? " error" : ""); el.innerHTML = html; el.hidden = !html; }
 function renderResult(r, pl) {
   const target = byId(S.idMap.T);
   const evi = ids => {
