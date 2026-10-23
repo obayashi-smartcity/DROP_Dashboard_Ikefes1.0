@@ -566,7 +566,7 @@
           <div class="result" id="result">
             <div class="placeholder"><b>まだ分析していません</b>目的と参考投稿を確認して「改善案を生成」を押してください。</div>
           </div>
-          <div class="note" id="sendNote">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、「画像も解析」が ON のときは投稿画像（このブラウザで長辺 512px に縮小したもの）、および入力した目的・追加指示のみで、アカウント ID・位置情報は送信しません。実行のたびに Name・目的・追加指示を記録します。</div>
+          <div class="note" id="sendNote">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、「画像も解析」が ON のときは投稿画像（このブラウザで長辺 512px に縮小したもの）、および入力した目的・追加指示のみで、アカウント ID・位置情報は送信しません。実行のたびに Name・目的・追加指示・参考投稿の ID・AI の改善提案を記録します。</div>
         </div>
       </div>
     </div>
@@ -609,6 +609,7 @@
    - GAS_URL : 改善案生成用 GAS（GAS_COACH.gs）の /exec URL
    - LOG_URL : 実行ログ記録用 GAS（GAS_COACH_LOG.gs）の /exec URL。空文字ならログを送らない
    - フロントから両 GAS を個別に呼ぶ（GAS 同士は通信しない）
+   - 呼び出し順：GAS_URL（改善案生成）→ 応答後に LOG_URL（参考投稿 ID・推論結果を含めて記録）
 ===================================================================== */
 const CONFIG = {
   DATA_SOURCES: ["json/mart_action_drop_engagement.json", "mart_action_drop_engagement.json"],
@@ -1151,36 +1152,73 @@ async function run(force) {
   }
   status(`<span class="spin"></span><span>AI が${imgStat.total ? "画像と本文を" : ""}解析して改善案を作成しています… <b id="sec">0</b> 秒</span>`);
   S.timer = setInterval(() => { const s = $("sec"); if (s) s.textContent = Math.floor((Date.now() - t0) / 1000); }, 250);
-  // ログと分析を並行送信。ログの成否は分析を止めない
-  const logP = logEnabled()
-    ? post({ action: "log", token: getToken(CONFIG.KEYS.LOG_TOKEN), goal: pl.goal.label, goal_note: pl.goal.note, target_id: pl.idMap.T, ref_count: pl.references.length, instructions: pl.instructions }, CONFIG.LOG_URL)
-    : Promise.resolve({ ok: true });
+  const seq = S.runSeq = (S.runSeq || 0) + 1;
   const res = await post({ action: "coach", token: getToken(CONFIG.KEYS.TOKEN), goal: pl.goal, context: pl.context, target: pl.target, references: pl.references, instructions: pl.instructions, force: !!force }, CONFIG.GAS_URL);
-  const logRes = await logP;
   clearInterval(S.timer); S.busy = false;
-  if (!logRes.ok && logRes.code === "AUTH") localStorage.removeItem(CONFIG.KEYS.LOG_TOKEN);
   syncButtons(); $("result").classList.remove("loading");
-  const logWarn = logRes.ok ? "" : `<span class="warn">※ 実行ログを記録できませんでした（${esc(logRes.message || "不明なエラー")}）</span>`;
+  const sec = ((Date.now() - t0) / 1000).toFixed(1);
   if (!res.ok) {
     if (res.code === "AUTH") {
+      // 認証切れは再ログイン後に再実行されるため、ログは記録しない
       clearTokens();
       if (!S.retried && getCreds()) { S.retried = true; return run(force); }
-      S.pendingForce = !!force; showLogin(res.message); status(logWarn); return;
+      S.pendingForce = !!force; showLogin(res.message); status(""); return;
     }
-    status(esc(res.message || "生成に失敗しました"), "error"); $("forceBtn").hidden = false; return;
+    status(esc(res.message || "生成に失敗しました"), "error"); $("forceBtn").hidden = false;
+    sendLog(pl, res, sec, seq);   // 失敗も記録（結果列は空）
+    return;
   }
   S.retried = false;
   S.lastKey = pl.key; S.idMap = pl.idMap;
   renderResult(res.result, pl);
-  const sec = ((Date.now() - t0) / 1000).toFixed(1);
   const at = res.generated_at ? new Date(res.generated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   $("resultMeta").textContent = `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""}${res.images_used ? ` ・ 画像 ${res.images_used} 枚` : ""}`;
   const imgWarn = res.images_note ? `<span class="warn">※ ${esc(res.images_note)}</span>`
     : imgStat.total && imgStat.ok < imgStat.total && !res.images_used ? `<span class="warn">※ 画像を読み取れなかったため本文のみで解析しました</span>` : "";
-  status([logWarn, imgWarn].filter(Boolean).join("　")); $("forceBtn").hidden = false; $("runBtn").classList.remove("stale");
+  status(imgWarn); $("forceBtn").hidden = false; $("runBtn").classList.remove("stale");
+  // AI の結果が返った後にログを送る（推論結果を記録するため）。表示は待たせない
+  sendLog(pl, res, sec, seq);
   $("resultPanel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+/* =====================================================================
+   実行ログ（GAS_COACH_LOG）：改善案生成 GAS の応答を受け取った後に送る
+   - 参考投稿 ID（artwork_id）は R1, R2 … の順で配列にして送る（シートにはカンマ区切りで記録）
+   - 推論結果（result）は GAS 側で列に展開して記録する
+   - 結果表示は待たせない。ログ用トークン切れなら保存済みの資格情報で 1 回だけ再ログインして再送する
+===================================================================== */
+async function sendLog(pl, res, sec, seq) {
+  if (!logEnabled()) return;
+  const body = {
+    action: "log",
+    goal: pl.goal.label, goal_note: pl.goal.note,
+    target_id: pl.idMap.T,
+    ref_ids: pl.references.map(r => pl.idMap[r.id]),
+    instructions: pl.instructions,
+    status: res.ok ? "OK" : (res.code || "ERROR"),
+    error: res.ok ? "" : (res.message || ""),
+    model: res.model || "", prompt_version: res.prompt_version || "",
+    cached: !!res.cached, elapsed_sec: Number(sec),
+    images_used: res.images_used || 0, images_note: res.images_note || "",
+    result: res.ok ? res.result : null
+  };
+  const send = () => post({ ...body, token: getToken(CONFIG.KEYS.LOG_TOKEN) }, CONFIG.LOG_URL);
+  let r = await send();
+  if (!r.ok && r.code === "AUTH") {
+    localStorage.removeItem(CONFIG.KEYS.LOG_TOKEN);
+    const c = getCreds();
+    if (c) {
+      const lr = await post({ action: "login", name: c.name, password: c.pw }, CONFIG.LOG_URL);
+      if (lr.ok) { setToken(lr.token, lr.expires_in, CONFIG.KEYS.LOG_TOKEN); r = await send(); }
+    }
+  }
+  if (r.ok) return;
+  console.warn("実行ログを記録できませんでした", r);
+  if (seq !== S.runSeq) return;   // 次の実行が始まっていたら表示しない
+  const st = $("status");
+  st.hidden = false;
+  st.insertAdjacentHTML("beforeend", (st.textContent.trim() ? "　" : "") + `<span class="warn">※ 実行ログを記録できませんでした（${esc(r.message || "不明なエラー")}）</span>`);
+}
 function renderResult(r, pl) {
   const target = byId(S.idMap.T);
   const evi = ids => {

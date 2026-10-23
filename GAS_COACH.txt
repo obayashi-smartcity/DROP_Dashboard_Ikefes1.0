@@ -1,18 +1,26 @@
 /**
- * DROP Coach（投稿改善アシスタント）— Google Apps Script（Web アプリ）
+ * DROP Coach（投稿改善アシスタント）— Google Apps Script（Web アプリ）  ※画像解析・方式 B 版
  * ------------------------------------------------------------
  * drop_coach.html から「改善したい投稿（T）」と「目的に応じた参考投稿（R1, R2 …）」を受け取り、
- * 外部ファイル（GitHub 上の Markdown）のプロンプトで Azure OpenAI に改善案を作らせ、JSON で返す。
- * GAS_GPT（エンゲージメント分析）をベースに、action を "coach" に置き換えた別プロジェクト。
+ * 本文と画像をまとめて Azure OpenAI に渡して改善案を作らせ、JSON で返す。
+ *
+ * ■ 画像の受け取り方（方式 B）
+ *   画像サーバー（adpf-poc.com）は Google のサーバー（UrlFetchApp）からのアクセスを 403 で拒否するため、
+ *   利用者のブラウザで画像を取得・縮小した data URL（image_data）を受け取って使う。
+ *   - image_data は先頭バイトを検査し、JPEG / PNG / WEBP の本物の画像だけを受け付ける
+ *   - image_data が無い投稿だけ、GAS から画像 URL を取得する（Referer 付き。失敗しても本文のみで続行）
  *
  * ■ アクション（POST / Content-Type: text/plain / body は JSON 文字列）
  *   { "action":"login", "password":"..." }
  *       → { ok:true, token:"...", expires_in:秒 }
  *   { "action":"coach", "token":"...",
- *     "goal":{ "type":"pv|like|other", "label":"...", "note":"自由記述（other のとき）" },
- *     "context":{...}, "target":{ id:"T", ... }, "references":[{ id:"R1", ... }],
- *     "instructions":"追加の指示（任意）", "fewshots":[{ "input":"...", "output":"..." }], "force":false }
- *       → { ok:true, cached:bool, elapsed_ms, model, prompt_version, generated_at, result:{...} }
+ *     "goal":{ "type":"pv|like|other", "label":"...", "note":"..." },
+ *     "context":{...},
+ *     "target":{ id:"T", ..., image:"https://...", image_data:"data:image/jpeg;base64,..." },
+ *     "references":[{ id:"R1", ..., image:"https://...", image_data:"data:..." }],
+ *     "instructions":"追加の指示（任意）", "force":false }
+ *       → { ok:true, cached, elapsed_ms, model, prompt_version, generated_at,
+ *           images_used, images_from_browser, images_note, result:{...} }
  *   エラー時 → { ok:false, code:"AUTH|LOCKED|LIMIT|BUSY|BAD_REQUEST|CONFIG|AI|SERVER", message:"..." }
  *
  * ■ スクリプトプロパティ
@@ -21,18 +29,26 @@
  *     AZURE_API_KEY_LUNA  … Azure OpenAI の API キー（※リポジトリには絶対に書かない）
  *     PROMPT_URL          … プロンプト（drop_coach_prompt.md）の raw URL
  *   任意（括弧内は既定値）
- *     REASONING_EFFORT (none) / MAX_OUTPUT_TOKENS (2500) / TOKEN_TTL_SEC (21600)
+ *     REASONING_EFFORT (none) / MAX_OUTPUT_TOKENS (3000) / TOKEN_TTL_SEC (21600)
  *     RESULT_CACHE_SEC (21600) / PROMPT_CACHE_SEC (300) / DAILY_LIMIT (100) / MAX_FAILS (30)
  *     MAX_REFS (20) / MAX_TEXT (300) / MAX_INSTR (400) / MAX_GOAL (200)
- *     MAX_SHOTS (3) / MAX_SHOT_TEXT (400)
+ *     ENABLE_IMAGES     (true)  … false で画像を一切使わない
+ *     IMAGE_URL_PREFIX  (https://adpf-poc.com/machiapps/userdata/photos/) … 受け付ける画像 URL の先頭（カンマ区切り可）
+ *     MAX_IMAGES        (6)     … 1 回に使う画像の上限（T 優先 → R の上から）
+ *     MAX_IMAGE_BYTES   (1500000) … 1 枚あたりのサイズ上限（デコード後）
+ *     IMAGE_DETAIL      (low)   … low / high / auto
+ *     SERVER_IMAGE_FETCH (true) … image_data が無い画像を GAS から取得するか（403 環境なら false で時間短縮）
+ *     IMAGE_REFERER     (https://adpf-poc.com/machiapps/) … GAS から取得するときに付ける Referer
+ *
+ * ■ 前提
+ *   デプロイ gpt-6-luna が画像入力（vision）に対応していること。
+ *   未対応で画像付きリクエストが 400 になった場合は、自動で画像を外して 1 回だけ再送する。
  *
  * ■ デプロイ
- *   デプロイ → 新しいデプロイ → 種類「ウェブアプリ」
- *     次のユーザーとして実行: 自分 / アクセスできるユーザー: 全員
- *   発行された /exec URL を HTML の CONFIG.GAS_URL に設定する。
+ *   貼り替え後、エディタで checkSetup() を実行 → デプロイを管理 → 編集 → 新バージョン（URL は変わらない）
+ *   ウェブアプリ設定：次のユーザーとして実行「自分」/ アクセスできるユーザー「全員」
  *
  * ■ 貼り付け時の注意
- *   コピー時に URL が a タグに、記号 > < が HTML 実体参照に化けることがある。
  *   貼り付け後に「&g」+「t;」「&l」+「t;」「<a」+「 href」で検索し 0 件であることを確認すること。
  */
 
@@ -47,7 +63,7 @@ const AZURE_MODEL = {
 const RAW_GITHUB_BASE = 'https://raw.githubusercontent.com';
 const DEFAULTS = {
   REASONING_EFFORT: 'none',
-  MAX_OUTPUT_TOKENS: 2500,
+  MAX_OUTPUT_TOKENS: 3000,
   TOKEN_TTL_SEC: 21600,
   RESULT_CACHE_SEC: 21600,
   PROMPT_CACHE_SEC: 300,
@@ -57,15 +73,22 @@ const DEFAULTS = {
   MAX_TEXT: 300,
   MAX_INSTR: 400,
   MAX_GOAL: 200,
-  MAX_SHOTS: 3,
-  MAX_SHOT_TEXT: 400
+  ENABLE_IMAGES: 'true',
+  IMAGE_URL_PREFIX: 'https://adpf-poc.com/machiapps/userdata/photos/',
+  MAX_IMAGES: 6,
+  MAX_IMAGE_BYTES: 1500000,
+  IMAGE_DETAIL: 'low',
+  SERVER_IMAGE_FETCH: 'true',
+  IMAGE_REFERER: 'https://adpf-poc.com/machiapps/'
 };
 const CACHE_MAX_SEC = 21600;
 const FAIL_WINDOW_SEC = 900;
-const KEY = { FAIL: 'coach_auth_fail', PROMPT: 'coach_prompt_v1', TOKEN: 'coach_tok_', RESULT: 'coach_res_', QUOTA: 'coach_count_' };
-const LIMITS = { STRENGTHS: 3, WEAKNESSES: 3, TRAITS: 3, EVIDENCE: 3, IMPROVEMENTS: 4, POINTS: 3, CAVEATS: 2 };
+const KEY = { FAIL: 'coach_auth_fail', PROMPT: 'coach_prompt_v2', TOKEN: 'coach_tok_', RESULT: 'coach_res_', QUOTA: 'coach_count_' };
+const LIMITS = { STRENGTHS: 3, WEAKNESSES: 3, TRAITS: 3, TIPS: 3, EVIDENCE: 3, IMPROVEMENTS: 4, POINTS: 3, CAVEATS: 2 };
 const LEVELS = ['低', '中', '高'];
 const GOAL_TYPES = { pv: 'PVを上げる', like: 'いいねを増やす', other: 'その他の目的' };
+const IMAGE_TYPES = /^image\/(jpeg|png|webp|gif)$/i;
+const DATA_URL_RE = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
 
 class AppError extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -80,6 +103,7 @@ function numProp_(key) {
   const n = Number(raw);
   return raw === null || raw === '' || !isFinite(n) ? Number(DEFAULTS[key]) : n;
 }
+function boolProp_(key) { return String(prop_(key)).trim().toLowerCase() !== 'false'; }
 function azureUrl_() {
   return AZURE_MODEL.endpoint.replace(/\/+$/, '') +
     '/openai/deployments/' + encodeURIComponent(AZURE_MODEL.deployment) +
@@ -107,7 +131,7 @@ function doPost(e) {
   }
 }
 function doGet() {
-  return json_({ ok: true, service: 'drop-coach-ai', time: new Date().toISOString() });
+  return json_({ ok: true, service: 'drop-coach-ai', images: boolProp_('ENABLE_IMAGES'), time: new Date().toISOString() });
 }
 
 /* ============================ ログイン ============================ */
@@ -145,7 +169,6 @@ function handleCoach_(req) {
   const apiKey = prop_(AZURE_MODEL.secret);
   if (!apiKey) throw new AppError('CONFIG', 'スクリプトプロパティ ' + AZURE_MODEL.secret + ' が未設定です');
 
-  // 入力の検証・整形（ホワイトリスト方式）
   const goal = sanitizeGoal_(req.goal);
   const target = sanitizePost_(req.target, 'T');
   if (!target) throw new AppError('BAD_REQUEST', '改善対象の投稿がありません');
@@ -153,13 +176,19 @@ function handleCoach_(req) {
   if (!references.length) throw new AppError('BAD_REQUEST', '参考投稿がありません');
   const context = sanitizeContext_(req.context);
   const instructions = sanitizeText_(req.instructions, numProp_('MAX_INSTR'));
-  const fewshots = sanitizeShots_(req.fewshots);
+
+  // 画像は投稿オブジェクトから切り離して管理（テキスト JSON には URL・データを入れない）
+  const imageReqs = pickImages_([target].concat(references));
 
   const prompt = loadPrompt_();
   const model = AZURE_MODEL.name;
 
+  // キャッシュキーは画像 URL ＋「ブラウザ画像の有無」で判定（base64 本体は含めない）
   const cache = CacheService.getScriptCache();
-  const cacheKey = KEY.RESULT + sha256_(JSON.stringify([model, prompt.version, goal, context, target, references, instructions, fewshots]));
+  const cacheKey = KEY.RESULT + sha256_(JSON.stringify([
+    model, prompt.version, goal, context, target, references, instructions,
+    imageReqs.map(x => [x.id, x.url, !!x.dataUrl]), prop_('IMAGE_DETAIL')
+  ]));
   if (!req.force) {
     const hit = cache.get(cacheKey);
     if (hit) {
@@ -171,6 +200,16 @@ function handleCoach_(req) {
   }
   if (!adjustDailyQuota_(+1)) throw new AppError('LIMIT', '本日の AI 分析回数の上限に達しました');
 
+  // ブラウザから届いた画像はそのまま使い、無いものだけ GAS で取得（失敗分は除外して続行）
+  const fromBrowser = imageReqs.filter(x => x.dataUrl);
+  const rest = imageReqs.filter(x => !x.dataUrl);
+  const fetched = rest.length && boolProp_('SERVER_IMAGE_FETCH') ? fetchImages_(rest) : [];
+  const order = imageReqs.map(x => x.id);
+  const images = fromBrowser.concat(fetched).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  const notes = [];
+  const missing = imageReqs.filter(x => !images.some(y => y.id === x.id)).map(x => x.id);
+  if (missing.length) notes.push('画像を取得できなかった投稿: ' + missing.join(', '));
+
   const refIds = references.map(r => r.id);
   const vars = {
     GOAL: goal.label + (goal.note ? '\n目的の詳細: ' + goal.note : ''),
@@ -180,39 +219,152 @@ function handleCoach_(req) {
     REFERENCES: JSON.stringify(references),
     REF_IDS: refIds.join(', '),
     INSTRUCTIONS: instructions || '（なし）',
-    FEW_SHOTS: formatShots_(fewshots) || '（なし）'
+    IMAGE_IDS: images.length ? images.map(x => x.id).join(', ') : '（なし）'
   };
   let userText = fillTemplate_(prompt.user, vars);
-  // テンプレートに差し込み欄が無い場合も、指示・Few-shot が必ず届くよう末尾に補う
   const tplRaw = prompt.user.replace(/\\/g, '');
   if (instructions && !/\{\{\s*INSTRUCTIONS\s*\}\}/.test(tplRaw)) userText += '\n\n### 利用者からの追加の指示\n' + instructions;
-  if (fewshots.length && !/\{\{\s*FEW_SHOTS\s*\}\}/.test(tplRaw)) userText += '\n\n### Few-shot 例\n' + formatShots_(fewshots);
+  if (images.length && !/\{\{\s*IMAGE_IDS\s*\}\}/.test(tplRaw)) userText += '\n\n### 添付画像のある投稿 ID\n' + vars.IMAGE_IDS;
 
-  const messages = [
+  const noImageNote = '\n\n※今回は画像が添付されていません。photo は空（summary は空文字、tips と evidence_ids は空配列）で返してください。';
+  const textOnly = [
     { role: 'system', content: prompt.system },
-    { role: 'user', content: userText }
+    { role: 'user', content: userText + noImageNote }
   ];
+  const withImages = images.length ? [
+    { role: 'system', content: prompt.system },
+    { role: 'user', content: buildUserContent_(userText, images) }
+  ] : null;
 
-  let data;
+  let data, imagesUsed = images.length;
   try {
-    data = callAzureOpenAI_(apiKey, messages);
+    if (withImages) {
+      try {
+        data = callAzureOpenAI_(apiKey, withImages);
+      } catch (err) {
+        if (err instanceof AppError && err.code === 'AI' && /image|vision|content.*type|HTTP 400/i.test(err.message)) {
+          console.warn('画像付きリクエストが拒否されたためテキストのみで再送します: ' + err.message);
+          notes.push('AI が画像を受け付けなかったため、本文のみで解析しました');
+          imagesUsed = 0;
+          data = callAzureOpenAI_(apiKey, textOnly);
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      data = callAzureOpenAI_(apiKey, textOnly);
+    }
   } catch (err) {
     adjustDailyQuota_(-1);
     throw err;
   }
+
   const payload = {
     ok: true,
     cached: false,
     model: model,
     prompt_version: prompt.version,
     generated_at: new Date().toISOString(),
-    result: normalizeResult_(data, new Set(['T'].concat(refIds)))
+    images_used: imagesUsed,
+    images_from_browser: imagesUsed ? fromBrowser.length : 0,
+    images_note: notes.join(' / '),
+    result: normalizeResult_(data, new Set(['T'].concat(refIds)), new Set(imagesUsed ? images.map(x => x.id) : []))
   };
   try {
     cache.put(cacheKey, JSON.stringify(payload), Math.min(numProp_('RESULT_CACHE_SEC'), CACHE_MAX_SEC));
   } catch (e) { /* 100KB 超などは無視 */ }
   payload.elapsed_ms = Date.now() - t0;
   return json_(payload);
+}
+
+/* ---------- 画像 ---------- */
+/** 許可プレフィックスに一致する https URL だけを受け付ける */
+function sanitizeImageUrl_(v) {
+  const u = String(v == null ? '' : v).trim();
+  if (!u || u.length > 500 || !/^https:\/\/[^\s"'<>\\]+$/.test(u)) return '';
+  if (/\.\.|%2e%2e/i.test(u)) return '';
+  const prefixes = String(prop_('IMAGE_URL_PREFIX') || '').split(',').map(x => x.trim()).filter(Boolean);
+  return prefixes.some(p => u.indexOf(p) === 0) ? u : '';
+}
+/** 先頭バイトから画像形式を判定 */
+function sniffType_(b) {
+  const u = i => (b[i] === undefined ? -1 : b[i] & 0xff);
+  if (u(0) === 0xFF && u(1) === 0xD8 && u(2) === 0xFF) return 'image/jpeg';
+  if (u(0) === 0x89 && u(1) === 0x50 && u(2) === 0x4E && u(3) === 0x47) return 'image/png';
+  if (u(0) === 0x47 && u(1) === 0x49 && u(2) === 0x46) return 'image/gif';
+  if (u(0) === 0x52 && u(1) === 0x49 && u(2) === 0x46 && u(3) === 0x46 && u(8) === 0x57 && u(9) === 0x45) return 'image/webp';
+  return '';
+}
+/**
+ * ブラウザから届いた data URL を検証。形式・サイズ・先頭バイトが正しいものだけ返す。
+ * 申告された MIME と中身が一致しない場合は中身の形式に合わせて組み直す。
+ */
+function sanitizeImageData_(v) {
+  const s = String(v == null ? '' : v);
+  const maxBytes = numProp_('MAX_IMAGE_BYTES');
+  if (!s || s.length > Math.ceil(maxBytes * 4 / 3) + 40) return '';
+  const m = s.match(DATA_URL_RE);
+  if (!m) return '';
+  let bytes;
+  try { bytes = Utilities.base64Decode(m[2]); } catch (e) { return ''; }
+  if (!bytes.length || bytes.length > maxBytes) return '';
+  const type = sniffType_(bytes);
+  if (!/^image\/(jpeg|png|webp)$/.test(type)) return '';
+  return type === m[1] ? s : 'data:' + type + ';base64,' + m[2];
+}
+/** 投稿から画像を取り出し、上限枚数まで選ぶ（T 優先 → R の上から）。投稿オブジェクトからは削除 */
+function pickImages_(posts) {
+  const enabled = boolProp_('ENABLE_IMAGES');
+  const max = Math.max(0, numProp_('MAX_IMAGES'));
+  const out = [];
+  posts.forEach(p => {
+    const url = p.image, data = p.image_data;
+    delete p.image; delete p.image_data;
+    if (enabled && url && out.length < max) out.push({ id: p.id, url: url, dataUrl: data || '' });
+  });
+  return out;
+}
+/** GAS から画像を取得（image_data が無い分のみ）。Referer 付き・先頭バイト判定。失敗は除外 */
+function fetchImages_(reqs) {
+  if (!reqs.length) return [];
+  const maxBytes = numProp_('MAX_IMAGE_BYTES');
+  const referer = String(prop_('IMAGE_REFERER') || '');
+  const opt = url => ({ url: url, muteHttpExceptions: true, followRedirects: true,
+    headers: Object.assign({ Accept: 'image/*' }, referer ? { Referer: referer } : {}) });
+  let responses;
+  try {
+    responses = UrlFetchApp.fetchAll(reqs.map(r => opt(r.url)));
+  } catch (e) {
+    console.warn('image fetchAll failed', e);
+    return [];
+  }
+  const out = [];
+  responses.forEach((res, i) => {
+    try {
+      const code = res.getResponseCode();
+      if (code !== 200) { console.warn('image HTTP ' + code + ' (server fetch): ' + reqs[i].url); return; }
+      const blob = res.getBlob();
+      const bytes = blob.getBytes();
+      if (!bytes.length || bytes.length > maxBytes) { console.warn('image size rejected (' + bytes.length + '): ' + reqs[i].url); return; }
+      const header = String(blob.getContentType() || '').split(';')[0].trim();
+      const type = sniffType_(bytes) || (IMAGE_TYPES.test(header) ? header : '');
+      if (!IMAGE_TYPES.test(type)) { console.warn('image type rejected (' + (header || '?') + '): ' + reqs[i].url); return; }
+      out.push({ id: reqs[i].id, url: reqs[i].url, dataUrl: 'data:' + type + ';base64,' + Utilities.base64Encode(bytes) });
+    } catch (e) {
+      console.warn('image convert failed: ' + reqs[i].url, e);
+    }
+  });
+  return out;
+}
+/** テキスト＋画像のマルチモーダル content を組み立てる（各画像の直前に ID ラベルを置く） */
+function buildUserContent_(userText, images) {
+  const detail = ['low', 'high', 'auto'].indexOf(String(prop_('IMAGE_DETAIL'))) >= 0 ? String(prop_('IMAGE_DETAIL')) : 'low';
+  const parts = [{ type: 'text', text: userText }];
+  images.forEach(img => {
+    parts.push({ type: 'text', text: '【' + img.id + ' の画像】' });
+    parts.push({ type: 'image_url', image_url: { url: img.dataUrl, detail: detail } });
+  });
+  return parts;
 }
 
 /* ---------- 入力整形 ---------- */
@@ -238,11 +390,17 @@ function sanitizePost_(p, id) {
   };
   if (Array.isArray(p.groups)) o.groups = p.groups.filter(g => g === 'like_top' || g === 'pv_top');
   if (p.name) o.name = str_(p.name, 40);
+  // 画像は「許可された URL」があるときだけ受け付ける（image_data 単独は不可）。pickImages_ で取り出して削除する
+  const img = sanitizeImageUrl_(p.image);
+  if (img) {
+    o.image = img;
+    const data = sanitizeImageData_(p.image_data);
+    if (data) o.image_data = data;
+  }
   return o;
 }
 function sanitizeRefs_(raw) {
   if (!Array.isArray(raw)) return [];
-  // ID はサーバー側で R1, R2 … に振り直す（フロントの ID と順序は一致させている）
   return raw.filter(p => p && typeof p === 'object')
     .slice(0, numProp_('MAX_REFS'))
     .map((p, i) => sanitizePost_(p, 'R' + (i + 1)));
@@ -257,7 +415,6 @@ function sanitizeContext_(raw) {
     ref_pool_size: num_(c.ref_pool_size), ref_pool_filter: str_(c.ref_pool_filter, 120)
   };
 }
-/** 自由記述：制御文字除去・長さ制限。行頭の # は除去してプロンプトの見出し構造を崩させない */
 function sanitizeText_(raw, max) {
   return String(raw == null ? '' : raw)
     .replace(/\r\n?/g, '\n')
@@ -267,29 +424,16 @@ function sanitizeText_(raw, max) {
     .trim()
     .slice(0, max);
 }
-function sanitizeShots_(raw) {
-  if (!Array.isArray(raw)) return [];
-  const max = numProp_('MAX_SHOT_TEXT');
-  return raw.filter(s => s && typeof s === 'object')
-    .map(s => ({ input: sanitizeText_(s.input, max), output: sanitizeText_(s.output, max) }))
-    .filter(s => s.output)
-    .slice(0, numProp_('MAX_SHOTS'));
-}
-function formatShots_(shots) {
-  return shots.map((s, i) =>
-    '例' + (i + 1) + '\n[入力]\n' + (s.input || '（指定なし）') + '\n[期待する出力]\n' + s.output
-  ).join('\n\n');
-}
 
-/** AI 出力を画面が想定する形に整える（文字列のみ採用・件数上限・存在しない ID の除去） */
-function normalizeResult_(data, validIds) {
+/** AI 出力を画面が想定する形に整える */
+function normalizeResult_(data, validIds, imageIds) {
   const d = data && typeof data === 'object' ? data : {};
   const text = v => (typeof v === 'string' ? v : '');
   const list = (v, max) => (Array.isArray(v) ? v.filter(x => typeof x === 'string' && x).slice(0, max) : []);
-  const ids = v => [...new Set(list(v, Infinity).filter(id => validIds.has(id)))].slice(0, LIMITS.EVIDENCE);
+  const ids = (v, set) => [...new Set(list(v, Infinity).filter(id => (set || validIds).has(id)))].slice(0, LIMITS.EVIDENCE);
   const level = v => (LEVELS.indexOf(v) >= 0 ? v : '');
   const obj = v => (v && typeof v === 'object' ? v : {});
-  const dg = obj(d.diagnosis), ri = obj(d.reference_insights), rw = obj(d.rewrite);
+  const dg = obj(d.diagnosis), ri = obj(d.reference_insights), rw = obj(d.rewrite), ph = obj(d.photo);
   return {
     headline: text(d.headline),
     diagnosis: {
@@ -302,6 +446,11 @@ function normalizeResult_(data, validIds) {
       traits: list(ri.traits, LIMITS.TRAITS),
       evidence_ids: ids(ri.evidence_ids)
     },
+    photo: imageIds.size ? {
+      summary: text(ph.summary),
+      tips: list(ph.tips, LIMITS.TIPS),
+      evidence_ids: ids(ph.evidence_ids, imageIds)
+    } : { summary: '', tips: [], evidence_ids: [] },
     improvements: (Array.isArray(d.improvements) ? d.improvements : [])
       .filter(a => a && typeof a === 'object' && typeof a.title === 'string' && a.title)
       .slice(0, LIMITS.IMPROVEMENTS)
@@ -319,11 +468,6 @@ function normalizeResult_(data, validIds) {
 }
 
 /* ============================ プロンプト ============================ */
-/**
- * プロンプトファイル書式：## SYSTEM / ## USER（### も可）
- * USER 内で置換: {{GOAL}} {{GOAL_METRIC}} {{CONTEXT}} {{TARGET}} {{REFERENCES}} {{REF_IDS}} {{INSTRUCTIONS}} {{FEW_SHOTS}}
- * <!-- --> コメントは送信前に除去する。
- */
 function loadPrompt_() {
   const cache = CacheService.getScriptCache();
   const hit = cache.get(KEY.PROMPT);
@@ -372,14 +516,13 @@ function clearPromptCache() {
 }
 
 /* ============================== Azure OpenAI ============================== */
-/** 画面の描画と対応する出力スキーマ（HTML 側 renderResult と合わせて変更すること） */
 const OUTPUT_SCHEMA = (() => {
   const strArr = { type: 'array', items: { type: 'string' } };
   const level = { type: 'string', enum: LEVELS };
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['headline', 'diagnosis', 'reference_insights', 'improvements', 'rewrite', 'caveats'],
+    required: ['headline', 'diagnosis', 'reference_insights', 'photo', 'improvements', 'rewrite', 'caveats'],
     properties: {
       headline: { type: 'string' },
       diagnosis: {
@@ -391,6 +534,11 @@ const OUTPUT_SCHEMA = (() => {
         type: 'object', additionalProperties: false,
         required: ['summary', 'traits', 'evidence_ids'],
         properties: { summary: { type: 'string' }, traits: strArr, evidence_ids: strArr }
+      },
+      photo: {
+        type: 'object', additionalProperties: false,
+        required: ['summary', 'tips', 'evidence_ids'],
+        properties: { summary: { type: 'string' }, tips: strArr, evidence_ids: strArr }
       },
       improvements: {
         type: 'array',
@@ -435,7 +583,7 @@ function callAzureOpenAI_(apiKey, messages) {
     throw new AppError('AI', 'Azure OpenAI の応答を解釈できません (HTTP ' + r.code + ')');
   }
   if (r.code !== 200) {
-    console.error('Azure OpenAI error', r.code, r.text);
+    console.error('Azure OpenAI error', r.code, String(r.text).slice(0, 1000));
     const m = String((json.error && json.error.message) || '').slice(0, 200);
     if (r.code === 401) throw new AppError('AI', 'API キーが無効です（' + AZURE_MODEL.secret + ' を確認してください）');
     if (r.code === 404) throw new AppError('AI', 'デプロイ「' + AZURE_MODEL.deployment + '」または api-version が見つかりません');
@@ -506,27 +654,29 @@ function checkSetup() {
   if (!/^https:\/\/[^\s<>"']+$/.test(url)) console.error('★ AZURE_MODEL.endpoint に HTML 等が混入しています: ' + AZURE_MODEL.endpoint);
   ['APP_PASSWORD', AZURE_MODEL.secret, 'PROMPT_URL'].forEach(k => console.log(k + ': ' + (prop_(k) ? '設定済み' : '★未設定')));
   console.log('MODEL: ' + AZURE_MODEL.name + ' / URL: ' + url);
+  console.log('画像解析: ' + (boolProp_('ENABLE_IMAGES') ? 'ON' : 'OFF') + ' / GAS からの取得: ' + (boolProp_('SERVER_IMAGE_FETCH') ? 'ON' : 'OFF') +
+    ' / 最大 ' + numProp_('MAX_IMAGES') + ' 枚 / detail=' + prop_('IMAGE_DETAIL'));
   console.log('PROMPT 取得先: ' + normalizePromptUrl_(prop_('PROMPT_URL')));
   clearPromptCache();
   const p = loadPrompt_();
   console.log('プロンプト version=' + p.version + ' system=' + p.system.length + '字 user=' + p.user.length + '字');
 }
-function testCoach() {
+/** ブラウザ画像（data URL）を受け取る経路の確認：1x1 の JPEG を使って Azure まで通す（エディタから実行） */
+function testCoachWithDataUrl() {
+  // 8x8 灰色の JPEG（モデル疎通用。内容の解析結果には意味がない）
+  const tinyJpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAAIAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDuqKKKAP/Z';
+  console.log('data URL 検証: ' + (sanitizeImageData_(tinyJpeg) ? 'OK' : '★NG'));
   const login = JSON.parse(handleLogin_({ password: prop_('APP_PASSWORD') }).getContent());
+  const base = 'https://adpf-poc.com/machiapps/userdata/photos/machi/';
   const t0 = Date.now();
   const out = JSON.parse(handleCoach_({
-    token: login.token,
-    force: true,
-    goal: { type: 'pv' },
-    context: { event: 'test', total_posts: 22, avg_like: 1.1, avg_pv: 6.8, avg_like_rate: 15.8, ref_basis: 'PV 上位', ref_top_n: 2, ref_pool_size: 21, ref_pool_filter: 'なし' },
-    target: { id: 'T', like: 2, pv: 0, like_rate: 0, like_rank: 1, pv_rank: 15, date: '2026-10-21', hour: '18', gender: '無回答', age: '30代', text_len: 44, text: '大同生命大阪本社ビル 1993年竣工・高さ88メートル ひろがりとまっすぐのコラボレーション', name: '大同生命大阪本社ビル' },
-    references: [
-      { like: 1, pv: 27, like_rate: 3.7, like_rank: 3, pv_rank: 1, date: '2026-10-19', hour: '17', text_len: 110, text: '今では珍しい二重螺旋階段と噴水です！カラフルな照明に照らされる段裏を見て「昭和の歌番組が始まりそう」なんて声も。', name: 'OMM' },
-      { like: 1, pv: 20, like_rate: 5, like_rank: 3, pv_rank: 2, date: '2026-10-20', hour: '10', text_len: 45, text: '隈研吾のデザイン ABC本社ビルの大階段の風景です 壁の市松模様は日本の障子がモチーフです', name: 'ABC本社ビル' }
-    ],
-    instructions: '改善後の本文例を必ず出す',
-    fewshots: [{ input: 'ABC本社ビルの大階段です', output: '隈研吾デザインの大階段。壁の市松模様は障子がモチーフ。ツアーで実物をぜひ！' }]
+    token: login.token, force: true, goal: { type: 'pv' },
+    context: { event: 'test', total_posts: 22, ref_basis: 'PV 上位', ref_top_n: 1, ref_pool_size: 21, ref_pool_filter: 'なし' },
+    target: { like: 2, pv: 0, text: '大同生命大阪本社ビル 1993年竣工・高さ88メートル', name: '大同生命大阪本社ビル',
+      image: base + '64d7328c-b040-4895-94ae-1ed9a8853881_thumbnail.jpeg', image_data: tinyJpeg },
+    references: [{ like: 1, pv: 27, text: '今では珍しい二重螺旋階段と噴水です！', name: 'OMM' }],
+    instructions: ''
   }).getContent());
-  console.log('所要 ' + (Date.now() - t0) + 'ms');
-  console.log(JSON.stringify(out, null, 2));
+  console.log('所要 ' + (Date.now() - t0) + 'ms / images_used=' + out.images_used + ' / from_browser=' + out.images_from_browser + ' / note=' + (out.images_note || '-'));
+  console.log(JSON.stringify(out.result, null, 2));
 }
