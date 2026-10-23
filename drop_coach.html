@@ -566,7 +566,7 @@
           <div class="result" id="result">
             <div class="placeholder"><b>まだ分析していません</b>目的と参考投稿を確認して「改善案を生成」を押してください。</div>
           </div>
-          <div class="note" id="sendNote">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、「画像も解析」が ON のときは投稿画像（サムネイル）、および入力した目的・追加指示のみで、アカウント ID・位置情報は送信しません。実行のたびに Name・目的・追加指示を記録します。</div>
+          <div class="note" id="sendNote">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、「画像も解析」が ON のときは投稿画像（このブラウザで長辺 512px に縮小したもの）、および入力した目的・追加指示のみで、アカウント ID・位置情報は送信しません。実行のたびに Name・目的・追加指示を記録します。</div>
         </div>
       </div>
     </div>
@@ -614,9 +614,12 @@ const CONFIG = {
   DATA_SOURCES: ["json/mart_action_drop_engagement.json", "mart_action_drop_engagement.json"],
   GAS_URL: "https://script.google.com/a/macros/tojormo.com/s/AKfycbylMnEUhNqEUvdl9H0BwLnM2jSvvNVaB8N6R5G81AMcuTfUn_8cUidihEp7OxJpIbTy/exec",
   LOG_URL: "https://script.google.com/macros/s/AKfycbyNHDEqgVxZn9i1TLxLyngRdc27kFwNTGDho94S9Z-T5oalVPJdbuAr-KgQ7jLzzEiI/exec",
-  TIMEOUT_MS: 90000,        // 画像解析を含むため長め（GAS 側の処理時間に合わせる）
+  TIMEOUT_MS: 90000,        // 画像解析を含むため長め
   SEND_IMAGES: true,        // 画像解析の初期値（UI で切替可）
   IMG_REFS_MAX: 5,          // 画像を送る参考投稿の上限（上から順）。対象投稿 T は常に送る
+  IMG_MAX_EDGE: 512,        // ブラウザで縮小するときの長辺(px)
+  IMG_QUALITY: 0.8,         // 縮小後 JPEG の画質
+  IMG_TIMEOUT_MS: 8000,     // 画像 1 枚の取得タイムアウト
   MAX_TEXT: 300,            // 本文の送信文字数上限（GAS 側 MAX_TEXT と合わせる）
   MAX_INSTR: 400,           // 追加指示の上限
   MAX_GOAL: 200,            // 「その他の目的」の上限
@@ -1020,6 +1023,67 @@ function toPayloadPost(p, id, extra) {
   if (CONFIG.SEND_NAME && p.n) o.name = p.n;
   return o;
 }
+/* =====================================================================
+   画像（方式 B）：画像サーバーは GAS（Google のサーバー）からのアクセスを 403 で拒否するため、
+   利用者のブラウザで画像を取得 → 長辺 IMG_MAX_EDGE px の JPEG に縮小 → data URL にして GAS に渡す。
+   ブラウザで読み取れない場合（CORS 非許可など）は URL だけ送り、GAS 側の取得にフォールバックする。
+===================================================================== */
+const IMG_CACHE = new Map();   // url → data URL（同じ画像の再取得・再縮小を避ける）
+function drawToDataUrl(src, w, h) {
+  const k = Math.min(1, CONFIG.IMG_MAX_EDGE / Math.max(w, h));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);   // 透過 PNG の背景を白に
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", CONFIG.IMG_QUALITY);              // 読み取り不可（tainted）なら例外
+}
+/** 1) fetch（CORS）で取得 */
+async function viaFetch(url) {
+  const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), CONFIG.IMG_TIMEOUT_MS);
+  try {
+    const r = await fetch(url, { mode: "cors", credentials: "omit", cache: "force-cache", signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    if ("createImageBitmap" in window) {
+      const bmp = await createImageBitmap(blob);
+      try { return drawToDataUrl(bmp, bmp.width, bmp.height); } finally { bmp.close && bmp.close(); }
+    }
+    const objUrl = URL.createObjectURL(blob);
+    try { return await viaImg(objUrl, false); } finally { URL.revokeObjectURL(objUrl); }
+  } finally { clearTimeout(to); }
+}
+/** 2) <img crossorigin> で取得（fetch が失敗した環境向けの予備） */
+function viaImg(url, cors = true) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    if (cors) img.crossOrigin = "anonymous";
+    const to = setTimeout(() => { img.src = ""; reject(new Error("timeout")); }, CONFIG.IMG_TIMEOUT_MS);
+    img.onload = () => { clearTimeout(to); try { resolve(drawToDataUrl(img, img.naturalWidth, img.naturalHeight)); } catch (e) { reject(e); } };
+    img.onerror = () => { clearTimeout(to); reject(new Error("load error")); };
+    img.src = url;
+  });
+}
+async function toDataUrlInBrowser(url) {
+  if (IMG_CACHE.has(url)) return IMG_CACHE.get(url);
+  let data = null;
+  try { data = await viaFetch(url); }
+  catch (e1) {
+    try { data = await viaImg(url); }
+    catch (e2) { console.warn("ブラウザで画像を読み取れませんでした（CORS 未許可の可能性）", url, e1.message, e2.message); }
+  }
+  if (data) IMG_CACHE.set(url, data);
+  return data;
+}
+/** 画像つき投稿に image_data を付与。戻り値：{ total, ok } */
+async function attachImageData(pl) {
+  const posts = [pl.target, ...pl.references].filter(p => p.image);
+  const data = await Promise.all(posts.map(p => toDataUrlInBrowser(p.image)));
+  let ok = 0;
+  posts.forEach((p, i) => { if (data[i]) { p.image_data = data[i]; ok++; } });
+  return { total: posts.length, ok };
+}
+
 function buildPayload() {
   const p = byId(S.selectedId);
   const { pool, refs } = buildRefs();
@@ -1080,7 +1144,12 @@ async function run(force) {
   S.busy = true; syncButtons();
   $("result").classList.add("loading");
   const t0 = Date.now();
-  status('<span class="spin"></span><span>AI が${pl.target.image || pl.references.some(r => r.image) ? "画像と本文を" : ""}解析して改善案を作成しています… <b id="sec">0</b> 秒</span>');
+  let imgStat = { total: 0, ok: 0 };
+  if (pl.target.image || pl.references.some(r => r.image)) {
+    status('<span class="spin"></span><span>画像を準備しています…</span>');
+    imgStat = await attachImageData(pl);
+  }
+  status(`<span class="spin"></span><span>AI が${imgStat.total ? "画像と本文を" : ""}解析して改善案を作成しています… <b id="sec">0</b> 秒</span>`);
   S.timer = setInterval(() => { const s = $("sec"); if (s) s.textContent = Math.floor((Date.now() - t0) / 1000); }, 250);
   // ログと分析を並行送信。ログの成否は分析を止めない
   const logP = logEnabled()
@@ -1106,7 +1175,8 @@ async function run(force) {
   const sec = ((Date.now() - t0) / 1000).toFixed(1);
   const at = res.generated_at ? new Date(res.generated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   $("resultMeta").textContent = `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""}${res.images_used ? ` ・ 画像 ${res.images_used} 枚` : ""}`;
-  const imgWarn = res.images_note ? `<span class="warn">※ ${esc(res.images_note)}</span>` : "";
+  const imgWarn = res.images_note ? `<span class="warn">※ ${esc(res.images_note)}</span>`
+    : imgStat.total && imgStat.ok < imgStat.total && !res.images_used ? `<span class="warn">※ 画像を読み取れなかったため本文のみで解析しました</span>` : "";
   status([logWarn, imgWarn].filter(Boolean).join("　")); $("forceBtn").hidden = false; $("runBtn").classList.remove("stale");
   $("resultPanel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
