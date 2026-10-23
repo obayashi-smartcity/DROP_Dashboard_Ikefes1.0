@@ -183,12 +183,14 @@
   .gtag{font-size:9.5px;font-weight:800;padding:1px 5px;margin-left:4px;vertical-align:1px}
   .gtag.lk{background:var(--rich-soft);color:var(--rich)} .gtag.pv{background:var(--pv-soft);color:var(--pv)}
   .ref-foot{font-size:11px;color:var(--dim);margin-top:10px}
+  .img-note{font-size:10.5px;color:var(--dim);margin-left:2px}
+  .ref .imgmark{font:800 9.5px var(--font);color:#fff;background:var(--text);padding:1px 5px;margin-left:4px;vertical-align:1px}
+  .rcard.photo{--c:#2b7a8c;--cs:#e2f1f4}
 
   /* prompt */
   .lbl{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--rich);font-weight:800;margin-bottom:8px;display:flex;align-items:baseline;gap:8px}
   .lbl span{color:var(--dim);font-weight:500;letter-spacing:0;text-transform:none}
   .presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-
   /* collapsible（details） */
   .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;-webkit-tap-highlight-color:transparent}
   .fold>summary::-webkit-details-marker{display:none}
@@ -196,13 +198,11 @@
   .fold[open]>summary .chev{transform:rotate(45deg)}
   .fold-state{margin-left:auto;font-size:11px;font-weight:700;color:var(--dim);white-space:nowrap}
   .fold-state.on{color:var(--rich);background:var(--rich-soft);padding:2px 8px}
-  /* Step1 詳細フィルタ */
   .f-top{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap}
   .f-more{border-top:1px solid var(--stroke-soft);margin-top:12px;padding-top:10px}
   .f-more>summary{font-size:12px;font-weight:800;color:var(--muted);padding:2px 0}
   .f-more>summary:hover{color:var(--text)}
   .f-more-body{display:flex;flex-wrap:wrap;gap:14px 26px;align-items:flex-end;padding-top:12px}
-  /* Step2 追加の指示 */
   .panel.fold-panel{padding:0}
   .fold-panel>summary{padding:16px 20px}
   .fold-panel>summary h2{margin:0;font-size:15px;font-weight:900;display:flex;align-items:center;gap:10px}
@@ -324,8 +324,6 @@
     #step2 .page-head p{display:none}
     #backBtn{padding:8px 10px;font-size:11.5px;flex:none}
     #backBtn .bt{display:none}
-
-    /* Step1 */
     .filters{padding:10px 12px;margin-bottom:12px}
     .f-top{gap:8px}
     .f-top .f-group{flex:1 1 100%}
@@ -353,15 +351,13 @@
     .dock .d-text{display:none}
     .dock .d-name{font-size:12.5px}
     #toStep2{padding:10px 14px;font-size:12.5px}
-
-    /* Step2 */
     :root{--gap:12px}
     .target{display:grid;grid-template-columns:96px 1fr;border-top-width:3px}
     .target .media{aspect-ratio:auto;height:100%;min-height:96px}
     .target .tb{padding:10px 12px;gap:7px}
     .target .tb .eyebrow,.target .tb .badges,.target .tmeta{display:none}
     .target .tname{font-size:13.5px}
-    .target .ttext{grid-column:1/-1;font-size:12px;max-height:120px;padding:8px 10px;margin:0 0 0}
+    .target .ttext{font-size:12px;max-height:120px;padding:8px 10px}
     .target .ttext-wrap{grid-column:1/-1;padding:0 12px 12px}
     .kv div{padding:6px 6px 5px}
     .kv b{font-size:17px}
@@ -385,6 +381,7 @@
     .ref .rv b{font-size:15px}
     .ref .rv span{display:none}
     .ref-foot{font-size:10.5px}
+    .ref-tools .toggle{flex-basis:100%}
     .fold-panel>summary{padding:14px 12px}
     .fold-panel>summary h2{font-size:14px}
     .fold-body{padding:0 12px 14px}
@@ -395,8 +392,6 @@
     .login{flex-direction:column;align-items:stretch;gap:6px}
     .login input{min-width:0;width:100%;font-size:16px}
     .login .btn{justify-content:center;margin-top:4px}
-
-    /* 結果 */
     .headline{font-size:15px;padding:12px 14px;margin-bottom:14px}
     .rgrid{grid-template-columns:1fr;gap:10px;margin-bottom:16px}
     .rcard{padding:12px}
@@ -406,8 +401,6 @@
     .rw-cols{grid-template-columns:1fr}
     .rw-col+.rw-col{border-left:none;border-top:1px solid var(--stroke-soft)}
     .rw-col{padding:12px}
-
-    /* モーダル */
     .modal{padding:0;align-items:flex-end}
     .modal-in{grid-template-columns:1fr;max-height:92vh;overflow:auto}
     .modal-media{min-height:0;max-height:45vh}
@@ -527,6 +520,7 @@
           <div class="ref-tools">
             <span>上位 <input type="number" class="num" id="refN" min="1" max="10" step="1" /> 件（1〜10）</span>
             <label class="toggle"><input type="checkbox" id="refFilter" />Step 1 の絞り込み条件を参考投稿にも適用</label>
+            <label class="toggle"><input type="checkbox" id="sendImg" />画像も解析<span class="img-note" id="imgNote"></span></label>
           </div>
           <div class="refs" id="refList"></div>
           <div class="ref-foot">チェックを外した投稿は AI に送りません。選択中の投稿とテスト投稿は除外しています。行をクリックで詳細表示。</div>
@@ -572,7 +566,7 @@
           <div class="result" id="result">
             <div class="placeholder"><b>まだ分析していません</b>目的と参考投稿を確認して「改善案を生成」を押してください。</div>
           </div>
-          <div class="note">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、および入力した目的・追加指示のみで、アカウント ID・画像・位置情報は送信しません。実行のたびに Name・目的・追加指示を記録します。</div>
+          <div class="note" id="sendNote">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、「画像も解析」が ON のときは投稿画像（サムネイル）、および入力した目的・追加指示のみで、アカウント ID・位置情報は送信しません。実行のたびに Name・目的・追加指示を記録します。</div>
         </div>
       </div>
     </div>
@@ -620,7 +614,9 @@ const CONFIG = {
   DATA_SOURCES: ["json/mart_action_drop_engagement.json", "mart_action_drop_engagement.json"],
   GAS_URL: "https://script.google.com/a/macros/tojormo.com/s/AKfycbylMnEUhNqEUvdl9H0BwLnM2jSvvNVaB8N6R5G81AMcuTfUn_8cUidihEp7OxJpIbTy/exec",
   LOG_URL: "https://script.google.com/macros/s/AKfycbyNHDEqgVxZn9i1TLxLyngRdc27kFwNTGDho94S9Z-T5oalVPJdbuAr-KgQ7jLzzEiI/exec",
-  TIMEOUT_MS: 60000,
+  TIMEOUT_MS: 90000,        // 画像解析を含むため長め（GAS 側の処理時間に合わせる）
+  SEND_IMAGES: true,        // 画像解析の初期値（UI で切替可）
+  IMG_REFS_MAX: 5,          // 画像を送る参考投稿の上限（上から順）。対象投稿 T は常に送る
   MAX_TEXT: 300,            // 本文の送信文字数上限（GAS 側 MAX_TEXT と合わせる）
   MAX_INSTR: 400,           // 追加指示の上限
   MAX_GOAL: 200,            // 「その他の目的」の上限
@@ -656,7 +652,7 @@ const S = {
   f: { name: "", genders: new Set(), ages: new Set(), sort: "new" },
   selectedId: null, step: 1,
   goal: "pv", goalNote: "", refN: CONFIG.REF_N, refFilter: false, refOff: new Set(),
-  instr: "",
+  instr: "", sendImages: CONFIG.SEND_IMAGES,
   busy: false, lastKey: null, idMap: {}, pendingForce: false, timer: null
 };
 
@@ -713,7 +709,7 @@ const passFilter = p => {
 
 /* ---------- 設定の保存 ---------- */
 function savePrefs() {
-  try { localStorage.setItem(CONFIG.KEYS.PREFS, JSON.stringify({ goal: S.goal, goalNote: S.goalNote, refN: S.refN, refFilter: S.refFilter, instr: S.instr, instrOpen: $("instrFold").open, fMoreOpen: $("fMore").open })); } catch (e) {}
+  try { localStorage.setItem(CONFIG.KEYS.PREFS, JSON.stringify({ goal: S.goal, goalNote: S.goalNote, refN: S.refN, refFilter: S.refFilter, instr: S.instr, sendImages: S.sendImages, instrOpen: $("instrFold").open, fMoreOpen: $("fMore").open })); } catch (e) {}
 }
 function loadPrefs() {
   try {
@@ -724,6 +720,7 @@ function loadPrefs() {
     S.refN = clampN(p.refN);
     S.refFilter = !!p.refFilter;
     S.instr = String(p.instr || "").slice(0, CONFIG.MAX_INSTR);
+    if (typeof p.sendImages === "boolean") S.sendImages = p.sendImages;
     $("instrFold").open = !!p.instrOpen;
     $("fMore").open = !!p.fMoreOpen;
   } catch (e) {}
@@ -891,6 +888,7 @@ function buildRefs() {
 function renderRefs() {
   $("refN").value = S.refN;
   $("refFilter").checked = S.refFilter;
+  $("sendImg").checked = S.sendImages;
   const { pool, refs } = buildRefs();
   const g = GOALS[S.goal];
   $("refSub").textContent = `${g.basis} ${S.refN} 件${S.goal === "other" ? "ずつ（重複は 1 件）" : ""} ・ 母集団 ${pool.length} 件${S.refFilter ? "（絞り込み適用）" : ""}`;
@@ -902,6 +900,7 @@ function renderRefs() {
   $("refList").innerHTML = refs.map(r => {
     const p = r.p, on = !S.refOff.has(p.id);
     const rid = on ? "R" + (++i) : "";
+    const img = on && S.sendImages && p.thumb && i <= CONFIG.IMG_REFS_MAX;
     const metric = S.goal === "like" ? "like" : "pv";
     const rank = S.goal === "like" ? r.lr : S.goal === "pv" ? r.pr : Math.min(r.lr, r.pr);
     const tags = S.goal === "other" ? r.groups.map(x => x === "like_top" ? '<span class="gtag lk">いいね</span>' : '<span class="gtag pv">PV</span>').join("") : "";
@@ -914,7 +913,7 @@ function renderRefs() {
       <input type="checkbox" ${on ? "checked" : ""} aria-label="参考投稿に含める">
       <div class="rk">${S.goal === "other" ? "" : rank}</div>
       ${p.thumb ? `<img src="${esc(p.thumb)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<div class="ph0"></div>'}
-      <div class="rm"><div class="rn">${rid ? `<span class="rid">${rid}</span>` : ""}${esc(p.n || "投稿者名なし")}${tags}</div><div class="rt">${esc(oneLine(p.s))}</div></div>
+      <div class="rm"><div class="rn">${rid ? `<span class="rid">${rid}</span>` : ""}${esc(p.n || "投稿者名なし")}${tags}${img ? '<span class="imgmark" title="画像も AI に送ります">IMG</span>' : ""}</div><div class="rt">${esc(oneLine(p.s))}</div></div>
       ${main}
     </div>`;
   }).join("");
@@ -923,10 +922,13 @@ function renderRefs() {
     cb.addEventListener("click", e => { e.stopPropagation(); cb.checked ? S.refOff.delete(id) : S.refOff.add(id); renderRefs(); checkStale(); });
     row.addEventListener("click", () => { const p = byId(id); if (p) openModal(p); });
   });
+  const nImg = (byId(S.selectedId)?.thumb ? 1 : 0) + Math.min(CONFIG.IMG_REFS_MAX, refs.filter(r => !S.refOff.has(r.p.id) && r.p.thumb).length);
+  $("imgNote").textContent = S.sendImages ? `（${nImg} 枚）` : "";
   syncRunNote();
 }
 $("refN").addEventListener("change", () => { S.refN = clampN($("refN").value); S.refOff.clear(); savePrefs(); renderRefs(); checkStale(); });
 $("refN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("refN").dispatchEvent(new Event("change")); } });
+$("sendImg").addEventListener("change", () => { S.sendImages = $("sendImg").checked; savePrefs(); renderRefs(); checkStale(); });
 $("refFilter").addEventListener("change", () => { S.refFilter = $("refFilter").checked; S.refOff.clear(); savePrefs(); renderRefs(); checkStale(); });
 
 /* ---------- 追加指示 ---------- */
@@ -973,7 +975,6 @@ function getCreds() {
 }
 function saveCreds(name, pw) { try { localStorage.setItem(CONFIG.KEYS.NAME, name); localStorage.setItem(CONFIG.KEYS.PW, pw); } catch (e) {} }
 function clearPw() { try { localStorage.removeItem(CONFIG.KEYS.PW); } catch (e) {} }
-/* 認証（分析用・ログ用を並行）。成功で true、失敗時はメッセージ文字列 */
 async function doLogin(name, pw) {
   const [res, logRes] = await Promise.all([
     post({ action: "login", name, password: pw }, CONFIG.GAS_URL),
@@ -985,13 +986,12 @@ async function doLogin(name, pw) {
   if (logRes) setToken(logRes.token, logRes.expires_in, CONFIG.KEYS.LOG_TOKEN);
   return { ok: true };
 }
-/* 保存済みの Name・パスワードで自動ログイン。成功で true */
 async function autoLogin() {
   const c = getCreds(); if (!c) return false;
   status('<span class="spin"></span><span>保存済みの情報でログインしています…</span>');
   const r = await doLogin(c.name, c.pw);
   if (r.ok) { status(""); syncButtons(); return true; }
-  if (r.code === "AUTH") clearPw();   // パスワード変更時などは保存分を破棄
+  if (r.code === "AUTH") clearPw();
   S.authMsg = r.message;
   return false;
 }
@@ -1034,10 +1034,12 @@ function buildPayload() {
     ref_basis: GOALS[S.goal].basis, ref_top_n: S.refN, ref_pool_size: pool.length,
     ref_pool_filter: S.refFilter ? [S.f.name.trim() && `ユーザー名:${S.f.name.trim()}`, S.f.genders.size && `性別:${[...S.f.genders].map(gLabel).join("/")}`, S.f.ages.size && `年齢層:${[...S.f.ages].map(aLabel).join("/")}`].filter(Boolean).join(" ") || "なし" : "なし"
   };
-  const target = toPayloadPost(p, "T", {});
+  const imgOf = q => (S.sendImages && q.thumb ? q.thumb : "");
+  references.forEach((r, i) => { const img = i < CONFIG.IMG_REFS_MAX ? imgOf(byId(idMap[r.id])) : ""; if (img) r.image = img; });
+  const target = toPayloadPost(p, "T", imgOf(p) ? { image: imgOf(p) } : {});
   const instructions = S.instr.replace(/\r\n?/g, "\n").trim().slice(0, CONFIG.MAX_INSTR);
   return { goal, context, target, references, instructions, idMap,
-    key: JSON.stringify([p.id, goal, context, references.map(r => [idMap[r.id], r.like, r.pv]), instructions]) };
+    key: JSON.stringify([p.id, goal, context, references.map(r => [idMap[r.id], r.like, r.pv, r.image || ""]), instructions, !!target.image]) };
 }
 
 function status(html, cls) { const st = $("status"); st.className = "status" + (cls ? " " + cls : ""); st.innerHTML = html; st.hidden = !html; }
@@ -1054,7 +1056,7 @@ function syncRunNote() {
   if (!S.selectedId || !STATS) return;
   const n = buildRefs().refs.filter(r => !S.refOff.has(r.p.id)).length;
   const goal = S.goal === "other" ? (S.goalNote.trim() ? `「${S.goalNote.trim().slice(0, 24)}${S.goalNote.trim().length > 24 ? "…" : ""}」` : "その他（未記入）") : GOALS[S.goal].label;
-  $("runNote").innerHTML = `目的 <b style="color:var(--rich)">${esc(goal)}</b> ・ 参考投稿 <b style="color:var(--rich)">${n}</b> 件で、選択した投稿の改善案を作成します。`;
+  $("runNote").innerHTML = `目的 <b style="color:var(--rich)">${esc(goal)}</b> ・ 参考投稿 <b style="color:var(--rich)">${n}</b> 件${S.sendImages ? "（画像つき）" : ""}で、選択した投稿の改善案を作成します。`;
 }
 function showLogin(msg) {
   $("login").hidden = false; $("loginErr").textContent = msg || "";
@@ -1078,7 +1080,7 @@ async function run(force) {
   S.busy = true; syncButtons();
   $("result").classList.add("loading");
   const t0 = Date.now();
-  status('<span class="spin"></span><span>AI が改善案を作成しています… <b id="sec">0</b> 秒</span>');
+  status('<span class="spin"></span><span>AI が${pl.target.image || pl.references.some(r => r.image) ? "画像と本文を" : ""}解析して改善案を作成しています… <b id="sec">0</b> 秒</span>');
   S.timer = setInterval(() => { const s = $("sec"); if (s) s.textContent = Math.floor((Date.now() - t0) / 1000); }, 250);
   // ログと分析を並行送信。ログの成否は分析を止めない
   const logP = logEnabled()
@@ -1093,7 +1095,7 @@ async function run(force) {
   if (!res.ok) {
     if (res.code === "AUTH") {
       clearTokens();
-      if (!S.retried && getCreds()) { S.retried = true; return run(force); }   // 期限切れ → 保存情報で 1 回だけ再ログインして再実行
+      if (!S.retried && getCreds()) { S.retried = true; return run(force); }
       S.pendingForce = !!force; showLogin(res.message); status(logWarn); return;
     }
     status(esc(res.message || "生成に失敗しました"), "error"); $("forceBtn").hidden = false; return;
@@ -1103,8 +1105,9 @@ async function run(force) {
   renderResult(res.result, pl);
   const sec = ((Date.now() - t0) / 1000).toFixed(1);
   const at = res.generated_at ? new Date(res.generated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
-  $("resultMeta").textContent = `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""}`;
-  status(logWarn); $("forceBtn").hidden = false; $("runBtn").classList.remove("stale");
+  $("resultMeta").textContent = `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""}${res.images_used ? ` ・ 画像 ${res.images_used} 枚` : ""}`;
+  const imgWarn = res.images_note ? `<span class="warn">※ ${esc(res.images_note)}</span>` : "";
+  status([logWarn, imgWarn].filter(Boolean).join("　")); $("forceBtn").hidden = false; $("runBtn").classList.remove("stale");
   $("resultPanel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1121,8 +1124,8 @@ function renderResult(r, pl) {
   const list = (arr, empty = "該当なし") => (arr || []).length ? `<ul class="li">${arr.map((t, i) => `<li><i>${i + 1}</i><span>${esc(t)}</span></li>`).join("")}</ul>` : `<div class="note" style="margin:0">${empty}</div>`;
   const LV = { "低": 1, "中": 2, "高": 3 };
   const meter = (label, v) => { const n = LV[v] || 0; return n ? `<span class="meter">${label}<s>${[1, 2, 3].map(i => `<u class="${i <= n ? "on" : ""}"></u>`).join("")}</s>${esc(v)}</span>` : ""; };
-  const d = r.diagnosis || {}, ins = r.reference_insights || {}, rw = r.rewrite || {};
-  const applied = [pl.goal.type === "other" && "目的（自由記述）", pl.instructions && "追加指示"].filter(Boolean);
+  const d = r.diagnosis || {}, ins = r.reference_insights || {}, rw = r.rewrite || {}, ph = r.photo || {};
+  const applied = [pl.goal.type === "other" && "目的（自由記述）", pl.instructions && "追加指示", (pl.target.image || pl.references.some(r => r.image)) && "画像"].filter(Boolean);
   $("result").innerHTML = `
     <div class="r-meta">目的：${esc(pl.goal.label)}${pl.goal.note ? `（${esc(pl.goal.note)}）` : ""} ・ 参考投稿 ${pl.references.length} 件</div>
     ${r.headline ? `<div class="headline">${esc(r.headline)}</div>` : ""}
@@ -1141,6 +1144,14 @@ function renderResult(r, pl) {
       ${ins.evidence_ids && ins.evidence_ids.length ? `<div style="margin-top:10px">${evi(ins.evidence_ids)}</div>` : ""}
     </div>
 
+    ${ph.summary || (ph.tips || []).length ? `
+    <div class="sec">写真の改善 ・ Photo</div>
+    <div class="rcard photo" style="margin-bottom:22px">
+      <h4><i>◎</i>画像から見た改善ポイント</h4>
+      ${ph.summary ? `<p class="rsum">${esc(ph.summary)}</p>` : ""}
+      ${list(ph.tips)}
+      ${ph.evidence_ids && ph.evidence_ids.length ? `<div style="margin-top:10px">${evi(ph.evidence_ids)}</div>` : ""}
+    </div>` : ""}
     <div class="sec">改善アクション ・ What to do</div>
     <div class="acts">${(r.improvements || []).length ? r.improvements.map((a, i) => `
       <div class="act">
@@ -1209,7 +1220,6 @@ $("login").addEventListener("submit", async e => {
   $("login").hidden = true; $("loginErr").textContent = ""; syncButtons();
   run(S.pendingForce);
 });
-
 $("logoutBtn2").addEventListener("click", () => $("logoutBtn").click());
 
 /* ---------- モーダル ---------- */
