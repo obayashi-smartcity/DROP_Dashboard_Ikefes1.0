@@ -217,13 +217,13 @@
       </div>
       <div class="panel dom-rich" style="border-top:2px solid rgba(122,88,176,.55);">
         <div class="post-grid" id="postGrid">
-          <div class="empty-state" style="grid-column:1/-1"><b>読み込み中…</b>json/mart_action_drop.json を取得しています</div>
+          <div class="empty-state" style="grid-column:1/-1"><b>読み込み中…</b>mart_action_drop.json を取得しています</div>
         </div>
         <div class="more-wrap" id="moreWrap"></div>
       </div>
 
       <div class="footer-note">
-        データソース: <code>json/mart_action_drop.json</code> ・ イベント <code>ikefes-2026</code> ・
+        データソース: <code>mart_action_drop.json</code> ・ フィルタ: <code>gender</code> / <code>age_group</code> / <code>post_date</code> ・ イベント <code>ikefes-2026</code> ・
         本ダッシュボードは社内デザインシステム（dashboard-common.css）に準拠しています。
       </div>
     </main>
@@ -268,7 +268,7 @@
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
   };
   const CONFIG = {
-    dataSource: "json/mart_action_drop.json",
+    dataSources: ["json/mart_action_drop.json", "mart_action_drop.json"],   // 他ページと同じくフォールバック付き
     map: {
       center: [34.6905, 135.5023], zoom: 13, minZoom: 10, maxZoom: 18,
       // CARTO ベースマップ設定は config.js から取得（APIキーの差し替えは config.js のみ）
@@ -287,7 +287,7 @@
   const esc = (t) => (t == null ? "" : String(t)).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   const state = { genders: new Set(), ages: new Set(), dmin: null, dmax: null, limit: CONFIG.pageSize };
-  let POSTS = [], DATES = [], map, markerLayer, markerById = {}, sliderBuilt = false;
+  let POSTS = [], RECORD_COUNT = 0, DATES = [], map, markerLayer, markerById = {}, sliderBuilt = false;
 
   // 日本国内の有効な緯度経度のみ許可（0,0 や欠損値・"undefined" 由来の値を除外）
   function isValidLatLng(lat, lng) {
@@ -305,8 +305,8 @@
       //（0,0 が混入すると fitBounds が西アフリカ沖まで広がり、大阪のピンとタイルが見えなくなるため）
       if (!isValidLatLng(lat, lng)) continue;
       out.push({
-        id: r.artwork_id, s: r.sentence || "", n: r.account_name || "",
-        g: r.gender || "", a: r.age_group || "", t: r.post_dated_at || "",
+        id: r.artwork_id, s: r.sentence || "", n: r.account_name || "", uid: r.account_id || "",
+        g: (r.gender || "").trim(), a: (r.age_group || "").trim(), t: r.post_dated_at || "",
         // post_date は "YYYY-MM-DD" 形式。無ければ post_dated_at の日付部を使用
         date: r.post_date || (r.post_dated_at || "").slice(0, 10),
         lat, lng, img: r.image_file_path_thumbnail || ""
@@ -334,10 +334,11 @@
   function pass(p) {
     if (state.genders.size && !state.genders.has(p.g)) return false;
     if (state.ages.size && !state.ages.has(p.a)) return false;
-    if (p.date) {
-      const di = DATES.indexOf(p.date);
-      if (di < 0 || di < state.dmin || di > state.dmax) return false;
-    }
+    // 投稿日（post_date）での絞り込み：日付が無い投稿は期間を全体以外に絞った時点で除外
+    const di = DATES.indexOf(p.date);
+    const fullRange = state.dmin <= 0 && state.dmax >= DATES.length - 1;
+    if (di < 0) return fullRange;
+    if (di < state.dmin || di > state.dmax) return false;
     return true;
   }
 
@@ -412,11 +413,11 @@ function render() {
       markerById[p.id] = m;
     });
 
-    setText("kTotal", POSTS.length);
+    setText("kTotal", RECORD_COUNT);
     setText("kShown", filtered.length);
-    setText("kUsers", new Set(filtered.map(p => p.n)).size);
+    setText("kUsers", new Set(filtered.map(p => p.uid || p.n)).size);   // account_id のユニーク数
     setText("kSpots", new Set(filtered.map(p => p.lat.toFixed(4) + "," + p.lng.toFixed(4))).size);
-    el("filterCount").innerHTML = `絞り込み結果 <b>${filtered.length}</b> 件 / 全 ${POSTS.length} 件`;
+    el("filterCount").innerHTML = `絞り込み結果 <b>${filtered.length}</b> 件 / 全 ${POSTS.length} 件` + (RECORD_COUNT > POSTS.length ? `<br><span style="color:var(--dim)">※位置情報が不正な ${RECORD_COUNT - POSTS.length} 件は対象外</span>` : "");
 
     renderList(filtered);
   }
@@ -550,10 +551,18 @@ function render() {
   markerLayer = L.layerGroup().addTo(map);
 
   // ---- JSON を直接参照して起動 ----
-  fetch(CONFIG.dataSource)
-    .then(res => { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+  async function loadData() {
+    let last;
+    for (const src of CONFIG.dataSources) {
+      try { const r = await fetch(src); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); }
+      catch (e) { last = e; }
+    }
+    throw last;
+  }
+  loadData()
     .then(json => {
       const records = json.records || [];
+      RECORD_COUNT = records.length;
       POSTS = normalize(records);
 
       DATES = Array.from(new Set(POSTS.map(p => p.date).filter(Boolean))).sort();

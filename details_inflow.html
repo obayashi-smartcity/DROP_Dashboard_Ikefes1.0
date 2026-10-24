@@ -45,6 +45,14 @@
     .sidebar-filter .reset-btn:hover { color:var(--text); background:var(--bg); border-color:var(--gray); }
     .sidebar-filter .noUi-connect { background: linear-gradient(90deg,#94a3b8,var(--gray)); }
     .sidebar-filter .noUi-horizontal .noUi-handle { border-color: var(--gray); }
+    .sidebar { --chip-on: var(--gray); --chip-soft: rgba(100,116,139,.12); }
+    /* ---- チップ式フィルタ（データソースの項目値から動的生成） ---- */
+    .sidebar-filter .filter-group + .filter-group { margin-top:14px; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .chip-btn { border:1px solid var(--stroke); background:var(--bg); color:var(--muted); font-family:var(--font); font-size:11px; padding:5px 9px; border-radius:0; cursor:pointer; transition:.15s; line-height:1.3; white-space:nowrap; user-select:none; }
+    .chip-btn:hover { color:var(--text); background:#fff; }
+    .chip-btn.on { background:var(--chip-soft); color:var(--chip-on); font-weight:700; border-color:var(--chip-on); }
+    .chip-btn .n { opacity:.6; margin-left:2px; }
     .chart-box.daily { height:320px; }
     .inflow-list { display:flex; flex-direction:column; gap:4px; }
     .inflow-row { display:grid; grid-template-columns:minmax(160px, 1.2fr) 2fr 90px; gap:14px; align-items:center; padding:10px 6px; border-bottom:1px solid var(--stroke-soft); }
@@ -70,15 +78,17 @@
       <a class="switch-item" href="details_drop_engagement.html"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>エンゲージメント</a>
     </nav>
     <div class="nav-group sidebar-filter">
-      <div class="panel-head"><h3>フィルタ</h3><span class="sub">対象期間で絞り込み</span></div>
+      <div class="panel-head"><h3>フィルタ</h3><span class="sub">対象期間・流入カテゴリ・流入元で絞り込み</span></div>
       <div class="filter-group">
         <div class="f-title">対象期間</div>
         <div class="time-readout" id="timeReadout">–</div>
         <div class="slider-wrap"><div id="dateSlider"></div></div>
       </div>
+      <div class="filter-group"><div class="f-title">流入カテゴリ（inflow_category）</div><div class="chips" id="categoryChips"></div></div>
+      <div class="filter-group"><div class="f-title">流入元（utm_source）</div><div class="chips" id="sourceChips"></div></div>
       <div class="filter-foot">
         <div class="f-count" id="filterMeta">–</div>
-        <button class="reset-btn" id="resetBtn">全期間</button>
+        <button class="reset-btn" id="resetBtn">条件をリセット</button>
       </div>
     </div>
   </aside>
@@ -94,7 +104,7 @@
     <div class="panel" style="border-top:2px solid rgba(100,116,139,.55);"><div class="panel-head"><h3>日付の折れ線グラフ</h3><span class="sub">COUNT(DISTINCT user_pseudo_id)</span></div><div class="chart-box daily"><canvas id="dailyChart"></canvas></div></div>
     <div class="section-label" id="inflow-section"><h2>Inflow Channels <span class="note">流入詳細（source_description）別ユニークユーザー</span></h2><div class="meta" id="inflowMeta">–</div></div>
     <div class="panel" style="border-top:2px solid rgba(100,116,139,.55);"><div class="inflow-list" id="inflowList"><div class="empty-state"><b>読み込み中…</b>mart_ga.json を取得しています</div></div></div>
-    <div class="footer-note">データソース: <code>mart_ga.json</code> ・ 集計軸: <code>source_description</code> ・ 指標: <code>COUNT(DISTINCT user_pseudo_id)</code></div>
+    <div class="footer-note">データソース: <code>mart_ga.json</code> ・ フィルタ: <code>event_date_jp</code> / <code>inflow_category</code> / <code>utm_source</code> ・ 集計軸: <code>source_description</code> ・ 指標: <code>COUNT(DISTINCT user_pseudo_id)</code></div>
   </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -108,16 +118,39 @@ const esc=t=>String(t??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 let ROWS=[], DATES=[], chart, sliderBuilt=false;
 const state={dmin:0,dmax:0};   // 日付インデックス範囲（デフォルト＝全期間）
 const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(s||"");
+const FILTER_FIELDS=[
+ {key:"inflow_category",mount:"categoryChips",label:v=>v||"未設定"},
+ {key:"utm_source",mount:"sourceChips",label:v=>v||"未設定"}
+];
+/* ---- 項目ベースのフィルタ（選択肢は JSON の値から動的生成。デフォルト全選択） ---- */
+const chipState={};   // field -> Set(選択値)
+const fieldVal=(r,f)=>{const v=r[f.key];return v===null||v===undefined?"":String(v).trim()};
+function buildChips(){
+ FILTER_FIELDS.forEach(f=>{
+  const cnt=new Map();ROWS.forEach(r=>{const v=fieldVal(r,f);cnt.set(v,(cnt.get(v)||0)+1)});
+  const vals=[...cnt.keys()].sort(f.sort||((a,b)=>(a==="")-(b==="")||cnt.get(b)-cnt.get(a)||a.localeCompare(b,"ja")));
+  chipState[f.key]=new Set(vals);
+  el(f.mount).innerHTML=vals.map(v=>`<button class="chip-btn on" data-field="${esc(f.key)}" data-val="${esc(v)}">${esc(f.label(v))}<span class="n">${cnt.get(v).toLocaleString("ja-JP")}</span></button>`).join("");
+ });
+ document.querySelectorAll(".chip-btn[data-field]").forEach(b=>b.addEventListener("click",()=>{
+  const set=chipState[b.dataset.field],v=b.dataset.val;
+  if(set.has(v)){set.delete(v);b.classList.remove("on")}else{set.add(v);b.classList.add("on")}
+  render();
+ }));
+}
+function resetChips(){document.querySelectorAll(".chip-btn[data-field]").forEach(b=>{b.classList.add("on");chipState[b.dataset.field].add(b.dataset.val)})}
+const passChips=r=>FILTER_FIELDS.every(f=>!chipState[f.key]||chipState[f.key].has(fieldVal(r,f)));
+
 async function loadData(){let last;for(const src of DATA_SOURCES){try{const r=await fetch(src);if(!r.ok)throw new Error(r.status);return await r.json()}catch(e){last=e}}throw last}
 function uniqueUsers(rows){return new Set(rows.map(r=>r.user_pseudo_id).filter(Boolean)).size}
 function render(){
  const start=DATES[state.dmin]||"", end=DATES[state.dmax]||"";
- const filtered=ROWS.filter(r=>validDate(r.event_date_jp)&&(!start||r.event_date_jp>=start)&&(!end||r.event_date_jp<=end));
+ const filtered=ROWS.filter(r=>validDate(r.event_date_jp)&&(!start||r.event_date_jp>=start)&&(!end||r.event_date_jp<=end)&&passChips(r));
  const byDate=new Map();filtered.forEach(r=>{if(!byDate.has(r.event_date_jp))byDate.set(r.event_date_jp,new Set());if(r.user_pseudo_id)byDate.get(r.event_date_jp).add(r.user_pseudo_id)});const dates=[...byDate.keys()].sort();const vals=dates.map(d=>byDate.get(d).size);
  const byFlow=new Map();filtered.forEach(r=>{const key=(r.source_description||"").trim()||"未設定";if(!byFlow.has(key))byFlow.set(key,{users:new Set(),desc:new Set()});if(r.user_pseudo_id)byFlow.get(key).users.add(r.user_pseudo_id);if((r.inflow_category||"").trim())byFlow.get(key).desc.add(r.inflow_category.trim())});const flows=[...byFlow].map(([name,v])=>({name,count:v.users.size,desc:[...v.desc].slice(0,2).join(" / ")})).sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name,"ja"));
- setText("kUsers",uniqueUsers(filtered).toLocaleString("ja-JP"));setText("kDays",dates.length.toLocaleString("ja-JP"));setText("kChannels",flows.length.toLocaleString("ja-JP"));setText("filterMeta",`${filtered.length.toLocaleString("ja-JP")} レコード`);setText("inflowMeta",`${flows.length} 経路`);
+ setText("kUsers",uniqueUsers(filtered).toLocaleString("ja-JP"));setText("kDays",dates.length.toLocaleString("ja-JP"));setText("kChannels",flows.length.toLocaleString("ja-JP"));setText("filterMeta",`絞り込み結果 ${filtered.length.toLocaleString("ja-JP")} 件 / 全 ${ROWS.length.toLocaleString("ja-JP")} 件`);setText("inflowMeta",`${flows.length} 経路`);
  if(chart)chart.destroy();chart=new Chart(el("dailyChart"),{type:"line",data:{labels:dates,datasets:[{label:"ユニークユーザー",data:vals,borderColor:GRAY,backgroundColor:"rgba(100,116,139,.10)",fill:true,tension:.25,pointRadius:3,pointHoverRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.parsed.y.toLocaleString("ja-JP")}人`}}},scales:{y:{beginAtZero:true,ticks:{precision:0}},x:{grid:{display:false}}}}});
- const max=flows.length?flows[0].count:1;el("inflowList").innerHTML=flows.length?flows.map(f=>`<div class="inflow-row"><div class="inflow-name"><b>${esc(f.name)}</b>${f.desc?`<small>${esc(f.desc)}</small>`:""}</div><div class="bar-track"><div class="bar" style="width:${(f.count/max*100).toFixed(1)}%"></div></div><div class="inflow-value">${f.count.toLocaleString("ja-JP")} 人</div></div>`).join(""):'<div class="empty-state"><b>該当データがありません</b>期間条件を変更してください</div>';
+ const max=flows.length?flows[0].count:1;el("inflowList").innerHTML=flows.length?flows.map(f=>`<div class="inflow-row"><div class="inflow-name"><b>${esc(f.name)}</b>${f.desc?`<small>${esc(f.desc)}</small>`:""}</div><div class="bar-track"><div class="bar" style="width:${(f.count/max*100).toFixed(1)}%"></div></div><div class="inflow-value">${f.count.toLocaleString("ja-JP")} 人</div></div>`).join(""):'<div class="empty-state"><b>該当データがありません</b>フィルタ条件を変更してください</div>';
 }
 function buildSlider(){
  const slider=el("dateSlider"), readout=el("timeReadout");
@@ -127,6 +160,6 @@ function buildSlider(){
  slider.noUiSlider.on("change",()=>render());
  sliderBuilt=true;
 }
-(async()=>{try{const d=await loadData();ROWS=(d.records||[]);const latest=ROWS.map(r=>r.event_date_time_jp).filter(Boolean).sort().pop();setText("metaUpdated2",latest||"–");DATES=[...new Set(ROWS.map(r=>r.event_date_jp).filter(validDate))].sort();state.dmin=0;state.dmax=Math.max(DATES.length-1,0);buildSlider();render()}catch(e){el("inflowList").innerHTML='<div class="empty-state"><b>データを読み込めませんでした</b>json/mart_ga.json または mart_ga.json の配置を確認してください</div>';console.error(e)}})();
-el("resetBtn").addEventListener("click",()=>{if(sliderBuilt)el("dateSlider").noUiSlider.set([0,Math.max(DATES.length-1,0)]);render()});
+(async()=>{try{const d=await loadData();ROWS=(d.records||[]);const latest=ROWS.map(r=>r.event_date_time_jp).filter(Boolean).sort().pop();setText("metaUpdated2",latest||"–");DATES=[...new Set(ROWS.map(r=>r.event_date_jp).filter(validDate))].sort();state.dmin=0;state.dmax=Math.max(DATES.length-1,0);buildChips();buildSlider();render()}catch(e){el("inflowList").innerHTML='<div class="empty-state"><b>データを読み込めませんでした</b>json/mart_ga.json または mart_ga.json の配置を確認してください</div>';console.error(e)}})();
+el("resetBtn").addEventListener("click",()=>{resetChips();state.dmin=0;state.dmax=Math.max(DATES.length-1,0);if(sliderBuilt)el("dateSlider").noUiSlider.set([0,Math.max(DATES.length-1,0)]);render()});
 </script></body></html>

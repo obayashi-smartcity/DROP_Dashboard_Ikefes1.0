@@ -295,7 +295,7 @@
       </div>
     </div>
 
-    <div class="footer-note">データソース: <code>mart_action_drop_engagement.json</code> ・ 指標: <code>like_count</code> / <code>pv_count</code> ・ 同数は同順位（タイブレーク表示順：もう一方の指標 → 投稿日時の新しい順）</div>
+    <div class="footer-note">データソース: <code>mart_action_drop_engagement.json</code> ・ フィルタ: <code>gender</code> / <code>age_group</code> / <code>post_date</code> ・ 指標: <code>like_count</code> / <code>pv_count</code> ・ 同数は同順位（タイブレーク表示順：もう一方の指標 → 投稿日時の新しい順）</div>
   </main>
 </div>
 
@@ -338,7 +338,7 @@ async function loadData() { let last; for (const s of DATA_SOURCES) { try { cons
 function normalize(records) {
   return records.map(r => ({
     id: r.artwork_id, n: r.account_name || "", s: (r.sentence || "").trim(),
-    g: r.gender || "", a: r.age_group || "", t: r.post_dated_at || "",
+    g: (r.gender || "").trim(), a: (r.age_group || "").trim(), t: r.post_dated_at || "",
     date: r.post_date || (r.post_dated_at || "").slice(0, 10),
     thumb: r.image_file_path_thumbnail || "", img: r.image_file_path || r.image_file_path_thumbnail || "",
     like: Number(r.like_count) || 0, pv: Number(r.pv_count) || 0,
@@ -349,8 +349,10 @@ function normalize(records) {
 function pass(p) {
   if (!state.genders.has(p.g)) return false;
   if (!state.ages.has(p.a)) return false;
+  // 投稿日（post_date）での絞り込み：日付が無い投稿は期間を全体以外に絞った時点で除外
   const di = DATES.indexOf(p.date);
-  if (di >= 0 && (di < state.dmin || di > state.dmax)) return false;
+  if (di < 0) return state.dmin <= 0 && state.dmax >= DATES.length - 1;
+  if (di < state.dmin || di > state.dmax) return false;
   return true;
 }
 
