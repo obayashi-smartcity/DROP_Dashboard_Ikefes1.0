@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DROP. Coach — 投稿改善アシスタント</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f6f5f9; --bg-b:#ecebf1; --card:#fff;
+    --stroke:#dcd9e3; --stroke-soft:#ebe9f0;
+    --text:#1d1b22; --muted:#5d5a66; --dim:#96939e;
+    --rich:#7a58b0; --rich-2:#a98cd0; --rich-soft:#efe9f7;
+    --pv:#4a6fa5; --pv-soft:#e6edf7;
+    --ok:#2f8a5b; --warn:#9a6b00; --err:#c0392b;
+    --font:"Inter","Noto Sans JP",system-ui,sans-serif;
+    --font-display:"Inter","Noto Sans JP",sans-serif;
+    --gap:18px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+  button{font-family:var(--font)}
+  [hidden]{display:none!important}
+
+  /* ---------- App bar ---------- */
+  .appbar{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--stroke-soft)}
+  .appbar-in{max-width:1240px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:28px}
+  .brand{font-family:var(--font-display);font-weight:900;font-size:20px;letter-spacing:-.5px;line-height:1;white-space:nowrap}
+  .brand i{font-style:normal;color:var(--rich)}
+  .brand small{display:block;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--dim);margin-top:4px}
+  .stepper{display:flex;align-items:center;gap:0;flex:1;min-width:0}
+  .step-tab{display:flex;align-items:center;gap:10px;background:none;border:none;padding:6px 4px;cursor:pointer;color:var(--dim);font-size:13px;font-weight:700;white-space:nowrap}
+  .step-tab b{font-family:var(--font-display);font-size:11px;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border:1.5px solid var(--stroke);color:var(--dim);transition:.15s}
+  .step-tab.active{color:var(--text)}
+  .step-tab.active b{background:var(--rich);border-color:var(--rich);color:#fff}
+  .step-tab.done b{border-color:var(--rich);color:var(--rich)}
+  .step-tab:disabled{cursor:not-allowed;opacity:.55}
+  .step-line{flex:0 1 70px;height:1.5px;background:var(--stroke);margin:0 14px}
+  .appbar-meta{display:flex;align-items:center;gap:14px;font-size:11.5px;color:var(--dim);white-space:nowrap}
+  .appbar-meta b{color:var(--rich)}
+  .link-btn{border:none;background:none;color:var(--dim);font-size:11.5px;cursor:pointer;text-decoration:underline;padding:0}
+  .link-btn:hover{color:var(--text)}
+
+  main{max-width:1240px;margin:0 auto;padding:26px 24px 120px}
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+  .page-head h1{margin:0;font-family:var(--font-display);font-weight:900;font-size:24px;letter-spacing:-.4px}
+  .page-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .eyebrow{font-size:10.5px;letter-spacing:2px;color:var(--rich);font-weight:800;text-transform:uppercase}
+
+  /* ---------- Filter bar ---------- */
+  .filters{background:var(--card);border:1px solid var(--stroke-soft);padding:14px 16px;margin-bottom:18px}
+  .f-group{display:flex;flex-direction:column;gap:7px;min-width:0}
+  .f-title{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);font-weight:800}
+  .search{position:relative}
+  .search svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);color:var(--dim)}
+  .search input{width:240px;border:1px solid var(--stroke);background:var(--bg);font:13px var(--font);padding:8px 10px 8px 32px;outline:none}
+  .search input:focus{border-color:var(--rich);background:#fff;box-shadow:0 0 0 3px var(--rich-soft)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{border:1px solid var(--stroke);background:#fff;color:var(--muted);font-size:11.5px;padding:6px 10px;cursor:pointer;transition:.15s;white-space:nowrap;line-height:1.2}
+  .chip:hover{color:var(--text);border-color:var(--rich-2)}
+  .chip.on{background:var(--rich-soft);color:var(--rich);border-color:var(--rich);font-weight:700}
+  .chip span{opacity:.55;margin-left:3px;font-variant-numeric:tabular-nums}
+  select.sel{border:1px solid var(--stroke);background:#fff;font:12.5px var(--font);padding:7px 10px;color:var(--text)}
+  .f-foot{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);white-space:nowrap}
+  .f-foot b{color:var(--rich);font-size:15px;font-variant-numeric:tabular-nums}
+
+  /* ---------- Post grid ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .pcard{position:relative;text-align:left;background:var(--card);border:1px solid var(--stroke-soft);padding:0;cursor:pointer;display:flex;flex-direction:column;transition:transform .15s, box-shadow .15s, border-color .15s;color:inherit}
+  .pcard:hover{transform:translateY(-2px);box-shadow:0 10px 24px -14px rgba(60,40,100,.35);border-color:var(--rich-2)}
+  .pcard.sel{border-color:var(--rich);box-shadow:0 0 0 2px var(--rich)}
+  .pcard .media{aspect-ratio:4/3;background:var(--bg-b);overflow:hidden;position:relative}
+  .pcard .media img{width:100%;height:100%;object-fit:cover;display:block}
+  .pcard .check{position:absolute;top:10px;right:10px;width:26px;height:26px;background:rgba(255,255,255,.9);border:1.5px solid var(--stroke);display:flex;align-items:center;justify-content:center;color:transparent;transition:.15s}
+  .pcard.sel .check{background:var(--rich);border-color:var(--rich);color:#fff}
+  .pcard .check svg{width:15px;height:15px}
+  .pcard .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:7px;flex:1}
+  .pcard .name{font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pcard .text{font-size:12px;line-height:1.6;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:3.2em}
+  .pcard .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:4px}
+  .metrics{display:flex;gap:12px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+  .metrics span{display:inline-flex;align-items:center;gap:4px}
+  .metrics svg{width:14px;height:14px}
+  .metrics .lk{color:var(--rich)} .metrics .pv{color:var(--pv)}
+  .pdate{font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .badges{display:flex;gap:5px;flex-wrap:wrap}
+  .badge{font-size:10px;padding:2px 7px;font-weight:700;line-height:1.4;border:1px solid transparent}
+  .badge.g{background:var(--rich-soft);color:var(--rich)}
+  .badge.a{background:var(--bg);color:var(--muted);border-color:var(--stroke)}
+  .badge.test{background:#fff4dc;color:var(--warn)}
+  .empty{padding:48px 20px;text-align:center;color:var(--dim);font-size:13px;background:var(--card);border:1px dashed var(--stroke);grid-column:1/-1}
+  .empty b{display:block;color:var(--muted);font-size:14px;margin-bottom:4px}
+
+  /* ---------- Selection dock ---------- */
+  .dock{position:fixed;left:0;right:0;bottom:0;z-index:40;transform:translateY(110%);visibility:hidden;transition:transform .25s ease,visibility .25s}
+  .dock.show{transform:none;visibility:visible}
+  .dock-in{max-width:1240px;margin:0 auto 16px;padding:10px 12px 10px 10px;background:var(--text);color:#fff;display:flex;align-items:center;gap:14px;box-shadow:0 14px 34px -12px rgba(0,0,0,.45)}
+  .dock img{width:48px;height:48px;object-fit:cover;background:#3a3742;flex:none}
+  .dock .d-main{min-width:0;flex:1}
+  .dock .d-cap{font-size:10px;letter-spacing:1.6px;color:var(--rich-2);font-weight:800}
+  .dock .d-name{font-size:13.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dock .d-text{font-size:11.5px;color:#b9b5c3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ---------- Buttons ---------- */
+  .btn{border:1px solid var(--rich);background:var(--rich);color:#fff;font:700 13px var(--font);padding:11px 22px;cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+  .btn:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
+  .btn svg{width:16px;height:16px}
+  .btn.ghost{background:#fff;color:var(--muted);border-color:var(--stroke)}
+  .btn.ghost:hover{color:var(--text);border-color:var(--rich)}
+  .btn.lg{padding:13px 30px;font-size:14px}
+  .btn.stale{box-shadow:0 0 0 4px var(--rich-soft)}
+
+  /* ---------- Step 2 layout ---------- */
+  .s2{display:grid;grid-template-columns:340px 1fr;gap:var(--gap);align-items:start}
+  .target{position:sticky;top:84px;background:var(--card);border:1px solid var(--stroke-soft);border-top:3px solid var(--rich)}
+  .target .media{aspect-ratio:4/3;background:var(--bg-b);cursor:zoom-in}
+  .target .media img{width:100%;height:100%;object-fit:cover;display:block}
+  .target .tb{padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px}
+  .target .tname{font-size:15px;font-weight:900}
+  .target .ttext-wrap{padding:0 18px 18px}
+  .target .ttext{font-size:12.5px;line-height:1.75;color:var(--text);white-space:pre-wrap;max-height:180px;overflow:auto;background:var(--bg);padding:10px 12px}
+  .kv{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--stroke-soft)}
+  .kv div{padding:10px 10px 9px;border-right:1px solid var(--stroke-soft)}
+  .kv div:last-child{border-right:none}
+  .kv small{display:block;font-size:10px;color:var(--dim);letter-spacing:.6px;font-weight:700}
+  .kv b{display:block;font-size:22px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.3px;line-height:1.2}
+  .kv em{font-style:normal;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .kv .lk b{color:var(--rich)} .kv .pv b{color:var(--pv)}
+  .tmeta{font-size:11px;color:var(--dim);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+
+  .stack{display:flex;flex-direction:column;gap:var(--gap);min-width:0}
+  .panel{background:var(--card);border:1px solid var(--stroke-soft);padding:18px 20px}
+  .ph{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .ph h2{margin:0;font-size:15px;font-weight:900;display:flex;align-items:center;gap:10px}
+  .ph h2 .n{font-family:var(--font-display);font-size:11px;color:#fff;background:var(--rich);padding:3px 7px;letter-spacing:.5px}
+  .ph .sub{font-size:11.5px;color:var(--dim)}
+
+  /* goals */
+  .goals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .goal{position:relative;text-align:left;border:1.5px solid var(--stroke);background:#fff;padding:14px 14px 13px;cursor:pointer;transition:.15s;display:flex;gap:12px;align-items:flex-start;--c:var(--rich);--cs:var(--rich-soft)}
+  .goal.pv{--c:var(--pv);--cs:var(--pv-soft)}
+  .goal.other{--c:#3d3a45;--cs:#ecebf1}
+  .goal:hover{border-color:var(--c)}
+  .goal.on{border-color:var(--c);background:var(--cs);box-shadow:inset 0 0 0 1px var(--c)}
+  .goal .gi{width:34px;height:34px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--cs);color:var(--c)}
+  .goal.on .gi{background:var(--c);color:#fff}
+  .goal .gi svg{width:18px;height:18px}
+  .goal b{display:block;font-size:13.5px;font-weight:900;color:var(--text)}
+  .goal small{display:block;font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5}
+  .goal-note{margin-top:12px}
+
+  textarea.ta,input.inp{width:100%;border:1px solid var(--stroke);background:#fff;font:12.5px/1.65 var(--font);padding:9px 11px;color:var(--text);outline:none;resize:vertical}
+  textarea.ta:focus,input.inp:focus{border-color:var(--rich);box-shadow:0 0 0 3px var(--rich-soft)}
+  .cnt{font-size:10.5px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums;margin-top:4px}
+
+  /* references */
+  .ref-tools{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px}
+  .num{width:58px;border:1px solid var(--stroke);font:800 13px var(--font);color:var(--rich);padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums}
+  .toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+  .toggle input{appearance:none;width:32px;height:18px;background:var(--stroke);position:relative;cursor:pointer;transition:.15s;margin:0}
+  .toggle input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;transition:.15s}
+  .toggle input:checked{background:var(--rich)}
+  .toggle input:checked::after{left:16px}
+  .refs{display:flex;flex-direction:column}
+  .ref{display:grid;grid-template-columns:22px 30px 46px 1fr auto;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--stroke-soft);cursor:pointer}
+  .ref:hover{background:var(--bg)}
+  .ref.off{opacity:.42}
+  .ref input{width:16px;height:16px;accent-color:var(--rich);margin:0;cursor:pointer}
+  .ref .rk{font-family:var(--font-display);font-weight:900;font-size:16px;color:var(--dim);text-align:center;font-variant-numeric:tabular-nums}
+  .ref.top .rk{color:var(--rich)}
+  .ref img,.ref .ph0{width:46px;height:46px;object-fit:cover;background:var(--bg-b);display:block}
+  .ref .rm{min-width:0}
+  .ref .rn{font-size:12.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ref .rt{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+  .ref .rid{font:800 10px var(--font);color:var(--rich);background:var(--rich-soft);padding:1px 5px;margin-right:6px}
+  .ref .rv{text-align:right;white-space:nowrap}
+  .ref .rv b{display:block;font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1}
+  .ref .rv span{font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .ref .rv.lk b{color:var(--rich)} .ref .rv.pv b{color:var(--pv)}
+  .gtag{font-size:9.5px;font-weight:800;padding:1px 5px;margin-left:4px;vertical-align:1px}
+  .gtag.lk{background:var(--rich-soft);color:var(--rich)} .gtag.pv{background:var(--pv-soft);color:var(--pv)}
+  .ref-foot{font-size:11px;color:var(--dim);margin-top:10px}
+  .img-note{font-size:10.5px;color:var(--dim);margin-left:2px}
+  .ref .imgmark{font:800 9.5px var(--font);color:#fff;background:var(--text);padding:1px 5px;margin-left:4px;vertical-align:1px}
+  .rcard.photo{--c:#2b7a8c;--cs:#e2f1f4}
+
+  /* ---------- Step 1：分析モード切替 ---------- */
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .mode{display:flex;gap:12px;align-items:flex-start;text-align:left;border:1.5px solid var(--stroke);background:#fff;padding:14px 16px;cursor:pointer;color:inherit;transition:.15s;-webkit-tap-highlight-color:transparent}
+  .mode:hover{border-color:var(--rich-2)}
+  .mode.on{border-color:var(--rich);background:var(--rich-soft);box-shadow:inset 0 0 0 1px var(--rich)}
+  .mode .mi{width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--rich-soft);color:var(--rich)}
+  .mode.on .mi{background:var(--rich);color:#fff}
+  .mode .mi svg{width:20px;height:20px}
+  .mode b{display:block;font-size:14px;font-weight:900}
+  .mode small{display:block;font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+  /* ---------- Step 1：投稿前チェック（画像＋コメント） ---------- */
+  .draft{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:var(--gap);align-items:start}
+  .vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;opacity:0}
+  .pick{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:16/9;border:2px dashed var(--stroke);background:var(--bg);color:var(--muted);cursor:pointer;text-align:center;font-size:12px;line-height:1.6;overflow:hidden;-webkit-tap-highlight-color:transparent;padding:10px}
+  .pick:hover{border-color:var(--rich-2);color:var(--text)}
+  .pick svg{width:34px;height:34px;color:var(--rich)}
+  .pick b{font-size:14px;color:var(--text)}
+  .pick.has{border:1px solid var(--stroke-soft);background:#111;padding:0}
+  .pick img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .pick.loading::after{content:"読み込み中…";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.85);font-weight:800;color:var(--rich)}
+  .pick-cap{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:var(--dim);margin-top:6px}
+  .pick-acts{display:flex;gap:8px;margin-top:10px}
+  .pick-acts .btn{flex:1;justify-content:center}
+  .btn.sm{padding:9px 12px;font-size:12.5px}
+  .d-err{font-size:12px;color:var(--err);font-weight:700;margin-top:8px}
+  .guide{margin-top:14px;background:var(--rich-soft);padding:10px 12px;font-size:12px;line-height:1.7}
+  .guide>b{color:var(--rich)}
+  .guide ol{margin:4px 0 0;padding-left:1.4em}
+  .guide ol b{color:var(--rich)}
+  .draft-flag{font-size:11.5px;color:var(--muted);line-height:1.6;background:var(--bg);padding:8px 10px;border-left:3px solid var(--rich)}
+  .target .media .noimg{display:flex;align-items:center;justify-content:center;height:100%;min-height:96px;color:var(--dim);font-size:12px}
+  /* ---------- 結果：視点・一致度 ---------- */
+  .rcard.view{--c:var(--rich);--cs:var(--rich-soft)}
+  .lvl{margin-left:auto;font:800 11px var(--font);padding:3px 9px;letter-spacing:.3px;white-space:nowrap}
+  .lvl.hi{background:#e5f3ec;color:var(--ok)} .lvl.mid{background:#fff4dc;color:var(--warn)} .lvl.lo{background:#fbe5e2;color:var(--err)}
+  .subh{font-size:11px;font-weight:800;color:var(--muted);margin:12px 0 6px}
+  ul.li.qlist li{background:#fff;border:1px dashed var(--stroke)}
+  ul.li.qlist li i{background:var(--rich-2)}
+  .prio{white-space:nowrap;font-size:9.5px;font-weight:800;color:#fff;background:var(--rich);padding:2px 6px;letter-spacing:.5px}
+  mark.blank{background:#fff1b8;color:inherit;padding:0 2px}
+  .rw-hint{font-size:11px;color:var(--warn);padding:0 16px 12px}
+  /* スマホ用の実行ボタン（Step 2 で実行パネルが画面外のときだけ表示） */
+  .rundock{display:none}
+
+  /* prompt */
+  .lbl{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--rich);font-weight:800;margin-bottom:8px;display:flex;align-items:baseline;gap:8px}
+  .lbl span{color:var(--dim);font-weight:500;letter-spacing:0;text-transform:none}
+  .presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  /* collapsible（details） */
+  .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;-webkit-tap-highlight-color:transparent}
+  .fold>summary::-webkit-details-marker{display:none}
+  .fold>summary .chev{width:8px;height:8px;border-right:2px solid var(--rich);border-bottom:2px solid var(--rich);transform:rotate(-45deg);transition:transform .15s;flex:none;margin-right:2px}
+  .fold[open]>summary .chev{transform:rotate(45deg)}
+  .fold-state{margin-left:auto;font-size:11px;font-weight:700;color:var(--dim);white-space:nowrap}
+  .fold-state.on{color:var(--rich);background:var(--rich-soft);padding:2px 8px}
+  .f-top{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap}
+  .f-more{border-top:1px solid var(--stroke-soft);margin-top:12px;padding-top:10px}
+  .f-more>summary{font-size:12px;font-weight:800;color:var(--muted);padding:2px 0}
+  .f-more>summary:hover{color:var(--text)}
+  .f-more-body{display:flex;flex-wrap:wrap;gap:14px 26px;align-items:flex-end;padding-top:12px}
+  .panel.fold-panel{padding:0}
+  .fold-panel>summary{padding:16px 20px}
+  .fold-panel>summary h2{margin:0;font-size:15px;font-weight:900;display:flex;align-items:center;gap:10px}
+  .fold-panel>summary h2 .n{font-family:var(--font-display);font-size:11px;color:#fff;background:var(--rich);padding:3px 7px;letter-spacing:.5px}
+  .fold-body{padding:0 20px 18px;border-top:1px solid var(--stroke-soft)}
+  .fold-body .lbl{margin-top:14px}
+  .login .remember{font-size:11px;color:var(--dim);flex-basis:100%}
+  .hint{font-size:11px;color:var(--dim);margin-top:10px;line-height:1.6}
+  kbd{font:10.5px var(--font);border:1px solid var(--stroke);background:#fff;padding:0 4px}
+
+  /* run */
+  .runbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .run-note{font-size:11.5px;color:var(--dim);line-height:1.6;flex:1;min-width:200px}
+  .run-side{display:flex;align-items:center;gap:12px;font-size:11.5px;color:var(--muted)}
+  .run-side b{color:var(--rich)}
+  .login{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding:12px;background:var(--bg);border:1px solid var(--stroke-soft)}
+  .login label{font-size:12px;color:var(--muted);font-weight:700}
+  .login input{border:1px solid var(--stroke);background:#fff;font:13px var(--font);padding:8px 10px;min-width:160px;outline:none}
+  .login input:focus{border-color:var(--rich);box-shadow:0 0 0 3px var(--rich-soft)}
+  .login .err{font-size:12px;color:var(--err);font-weight:700}
+  .status{margin-top:14px;font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:10px}
+  .status.error{color:var(--err);font-weight:700}
+  .status.stale{color:var(--warn)}
+  .status .warn{color:var(--warn)}
+  .spin{width:14px;height:14px;border:2px solid var(--rich-soft);border-top-color:var(--rich);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* result */
+  .result{margin-top:4px}
+  .result.loading{opacity:.45;transition:opacity .2s}
+  .r-meta{font-size:11px;color:var(--dim);margin-bottom:10px}
+  .headline{font-size:17px;font-weight:900;line-height:1.6;padding:16px 20px;background:linear-gradient(90deg,var(--rich-soft),transparent);border-left:4px solid var(--rich);margin-bottom:20px}
+  .sec{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim);font-weight:800;margin:6px 0 12px}
+  .sec::after{content:"";flex:1;height:1px;background:var(--stroke-soft)}
+  .rgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+  .rcard{border:1px solid var(--stroke-soft);border-top:3px solid var(--c);padding:14px 16px;--c:var(--rich);--cs:var(--rich-soft);background:#fff}
+  .rcard.good{--c:var(--ok);--cs:#e5f3ec}
+  .rcard.gap{--c:#c7792b;--cs:#fbeee0}
+  .rcard h4{margin:0 0 8px;font-size:13px;font-weight:900;display:flex;align-items:center;gap:8px}
+  .rcard h4 i{font-style:normal;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;background:var(--cs);color:var(--c);font-size:13px}
+  .rsum{font-size:13px;line-height:1.7;margin:0 0 12px}
+  ul.li{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  ul.li li{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;line-height:1.6;background:var(--bg);padding:8px 10px}
+  ul.li li i{font-style:normal;flex:none;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;background:var(--c);color:#fff;font:800 11px var(--font)}
+  .acts{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+  .act{display:grid;grid-template-columns:36px 1fr;gap:14px;background:#fff;border:1px solid var(--stroke-soft);border-left:3px solid var(--rich);padding:14px 16px}
+  .act-no{font-family:var(--font-display);font-weight:900;font-size:24px;color:var(--rich);line-height:1;text-align:center;padding-top:2px}
+  .act-t{font-size:14px;font-weight:900;line-height:1.5}
+  .act-d{font-size:12.5px;line-height:1.7;color:var(--muted);margin-top:3px}
+  .act-ex{margin-top:8px;font-size:12.5px;line-height:1.65;background:var(--rich-soft);padding:8px 12px;border-left:2px solid var(--rich)}
+  .act-ex small{display:block;font-size:10px;font-weight:800;color:var(--rich);letter-spacing:1px;margin-bottom:2px}
+  .act-meta{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;align-items:center}
+  .meter{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--dim);font-weight:700}
+  .meter s{text-decoration:none;display:inline-flex;gap:2px}
+  .meter s u{text-decoration:none;width:10px;height:6px;background:var(--stroke)}
+  .meter s u.on{background:var(--rich)}
+  .evi{display:flex;flex-wrap:wrap;gap:6px}
+  .evi button{border:1px solid var(--stroke);background:#fff;color:var(--muted);font:11px var(--font);padding:3px 8px;cursor:pointer;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .evi button:hover{border-color:var(--rich);color:var(--rich)}
+  .evi button b{color:var(--rich);margin-right:4px}
+  .rewrite{border:1px solid var(--stroke-soft);background:#fff;margin-bottom:22px}
+  .rw-cols{display:grid;grid-template-columns:1fr 1fr}
+  .rw-col{padding:14px 16px}
+  .rw-col+.rw-col{border-left:1px solid var(--stroke-soft);background:linear-gradient(180deg,var(--rich-soft),#fff 60%)}
+  .rw-col small{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;font-weight:800;letter-spacing:1.2px;color:var(--dim);margin-bottom:8px}
+  .rw-col+.rw-col small{color:var(--rich)}
+  .rw-col p{margin:0;font-size:13px;line-height:1.85;white-space:pre-wrap}
+  .rw-points{border-top:1px solid var(--stroke-soft);padding:12px 16px;display:flex;flex-direction:column;gap:5px}
+  .rw-points div{font-size:12px;color:var(--muted);line-height:1.6}
+  .rw-points div::before{content:"✓";color:var(--rich);font-weight:900;margin-right:8px}
+  .copy{border:1px solid var(--rich);background:#fff;color:var(--rich);font:700 10.5px var(--font);padding:3px 9px;cursor:pointer;letter-spacing:0}
+  .copy:hover{background:var(--rich);color:#fff}
+  .caveats{font-size:11.5px;color:var(--muted);background:var(--bg);padding:10px 14px;line-height:1.7}
+  .caveats b{color:var(--warn);margin-right:6px}
+  .applied{font-size:11px;color:var(--dim);margin-top:10px}
+  .note{font-size:10.5px;color:var(--dim);line-height:1.7;margin-top:12px}
+  .placeholder{border:1px dashed var(--stroke);padding:34px 20px;text-align:center;color:var(--dim);font-size:12.5px;line-height:1.7}
+  .placeholder b{display:block;color:var(--muted);font-size:14px;margin-bottom:4px}
+
+  /* modal */
+  .modal{position:fixed;inset:0;z-index:60;background:rgba(20,16,30,.62);display:none;align-items:center;justify-content:center;padding:24px}
+  .modal.show{display:flex}
+  .modal-in{background:#fff;max-width:880px;width:100%;max-height:90vh;display:grid;grid-template-columns:1.1fr 1fr;overflow:hidden;position:relative}
+  .modal-media{background:#111;display:flex;align-items:center;justify-content:center;min-height:300px}
+  .modal-media img{max-width:100%;max-height:90vh;object-fit:contain;display:block}
+  .modal-media .noimg{color:#888;font-size:12px}
+  .modal-body{padding:24px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+  .modal-body .mn{font-size:16px;font-weight:900;padding-right:30px}
+  .modal-body .mt{font-size:13px;line-height:1.85;white-space:pre-wrap}
+  .modal-body .md{font-size:11px;color:var(--dim)}
+  .modal-x{position:absolute;top:10px;right:12px;width:34px;height:34px;border:none;background:rgba(255,255,255,.9);font-size:22px;cursor:pointer;color:var(--muted)}
+  body.lock{overflow:hidden}
+
+  .fade{animation:fade .3s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  @media (max-width:1020px){
+    .s2{grid-template-columns:1fr}
+    .target{position:static}
+    .rgrid,.two{grid-template-columns:1fr}
+  }
+  /* ===== スマホ（iPhone SE 第3世代 375×667 を基準） ===== */
+  @media (max-width:720px){
+    html,body{font-size:13px}
+    .appbar-in{padding:10px 14px;gap:10px;flex-wrap:nowrap}
+    .brand{font-size:16px}
+    .brand small{display:none}
+    .appbar-meta{display:none}
+    .stepper{justify-content:flex-end}
+    .step-line{flex:0 1 18px;margin:0 6px}
+    .step-tab{font-size:11.5px;gap:6px;padding:4px 2px}
+    .step-tab b{width:22px;height:22px;font-size:10px}
+    .step-tab .lt{display:none}
+    .step-tab.active .lt{display:inline}
+    main{padding:14px 12px calc(96px + env(safe-area-inset-bottom))}
+    .page-head{margin-bottom:12px;gap:10px;align-items:flex-start;flex-wrap:nowrap}
+    .page-head h1{font-size:19px}
+    .page-head p{font-size:12px;line-height:1.6}
+    #step2 .page-head p{display:none}
+    #backBtn{padding:8px 10px;font-size:11.5px;flex:none}
+    #backBtn .bt{display:none}
+    .filters{padding:10px 12px;margin-bottom:12px}
+    .f-top{gap:8px}
+    .f-top .f-group{flex:1 1 100%}
+    .f-top .f-title{display:none}
+    .search{width:100%}
+    .search input{width:100%;font-size:16px;padding:9px 10px 9px 32px}
+    .f-foot{margin-left:0;width:100%;justify-content:space-between}
+    .f-more{margin-top:10px;padding-top:8px}
+    .f-more .fx{display:none}
+    .f-more-body{gap:12px;padding-top:10px}
+    .f-more-body .f-group{width:100%}
+    select.sel{width:100%;font-size:16px;padding:8px 10px}
+    .chip{padding:7px 10px;font-size:12px}
+    .grid{grid-template-columns:1fr 1fr;gap:8px}
+    .pcard:hover{transform:none;box-shadow:none}
+    .pcard .check{top:6px;right:6px;width:22px;height:22px}
+    .pcard .body{padding:8px 9px 10px;gap:5px}
+    .pcard .name{font-size:12px}
+    .pcard .text{font-size:11px;-webkit-line-clamp:2;min-height:0;line-height:1.5}
+    .pcard .badges{display:none}
+    .pcard .pdate{display:none}
+    .metrics{gap:10px;font-size:11.5px}
+    .dock-in{margin:0;padding:8px 10px calc(8px + env(safe-area-inset-bottom));gap:10px}
+    .dock img,.dock .ph0{width:40px!important;height:40px!important}
+    .dock .d-text{display:none}
+    .dock .d-name{font-size:12.5px}
+    #toStep2{padding:10px 14px;font-size:12.5px}
+    :root{--gap:12px}
+    .target{display:grid;grid-template-columns:96px 1fr;border-top-width:3px}
+    .target .media{aspect-ratio:auto;height:100%;min-height:96px}
+    .target .tb{padding:10px 12px;gap:7px}
+    .target .tb .eyebrow,.target .tb .badges,.target .tmeta{display:none}
+    .target .tname{font-size:13.5px}
+    .target .ttext{font-size:12px;max-height:120px;padding:8px 10px}
+    .target .ttext-wrap{grid-column:1/-1;padding:0 12px 12px}
+    .kv div{padding:6px 6px 5px}
+    .kv b{font-size:17px}
+    .kv small,.kv em{font-size:9.5px}
+    .panel{padding:14px 12px}
+    .ph{margin-bottom:10px}
+    .ph h2{font-size:14px}
+    .ph .sub{font-size:10.5px;flex-basis:100%}
+    .goals{grid-template-columns:1fr 1fr 1fr;gap:6px}
+    .goal{flex-direction:column;align-items:center;text-align:center;padding:10px 4px;gap:6px}
+    .goal .gi{width:30px;height:30px}
+    .goal b{font-size:12px}
+    .goal small{display:none}
+    textarea.ta{font-size:16px}
+    .ref-tools{gap:10px;font-size:11.5px}
+    .num{font-size:16px;width:54px}
+    .ref{grid-template-columns:20px 40px 1fr auto;gap:8px;padding:8px 2px}
+    .ref .rk{display:none}
+    .ref img,.ref .ph0{width:40px;height:40px}
+    .ref .rt{font-size:11px}
+    .ref .rv b{font-size:15px}
+    .ref .rv span{display:none}
+    .ref-foot{font-size:10.5px}
+    .ref-tools .toggle{flex-basis:100%}
+    .fold-panel>summary{padding:14px 12px}
+    .fold-panel>summary h2{font-size:14px}
+    .fold-body{padding:0 12px 14px}
+    .hint .pc{display:none}
+    .runbar{gap:10px}
+    .runbar .btn.lg{width:100%;justify-content:center;padding:14px}
+    .run-note{min-width:0;font-size:11px}
+    .login{flex-direction:column;align-items:stretch;gap:6px}
+    .login input{min-width:0;width:100%;font-size:16px}
+    .login .btn{justify-content:center;margin-top:4px}
+    .headline{font-size:15px;padding:12px 14px;margin-bottom:14px}
+    .rgrid{grid-template-columns:1fr;gap:10px;margin-bottom:16px}
+    .rcard{padding:12px}
+    .act{grid-template-columns:26px 1fr;gap:10px;padding:12px}
+    .act-no{font-size:20px}
+    .act-t{font-size:13px}
+    .rw-cols{grid-template-columns:1fr}
+    .rw-col+.rw-col{border-left:none;border-top:1px solid var(--stroke-soft)}
+    .rw-col{padding:12px}
+    .modal{padding:0;align-items:flex-end}
+    .modal-in{grid-template-columns:1fr;max-height:92vh;overflow:auto}
+    .modal-media{min-height:0;max-height:45vh}
+    .modal-media img{max-height:45vh}
+    .modal-body{padding:16px;overflow:visible}
+    /* --- v4：分析モード・投稿前チェック --- */
+    #s1Desc{display:none}
+    .modes{gap:6px;margin-bottom:12px}
+    .mode{flex-direction:column;gap:6px;padding:10px 10px 11px}
+    .mode .mi{width:30px;height:30px}
+    .mode .mi svg{width:17px;height:17px}
+    .mode b{font-size:13px}
+    .mode small{font-size:10.5px;margin-top:1px}
+    .draft{grid-template-columns:1fr}
+    .pick b{font-size:13.5px}
+    .pick-acts .btn{padding:11px 8px}
+    #dText{min-height:140px}
+    input.inp{font-size:16px}
+    .guide{font-size:11.5px}
+    .ref{grid-template-columns:24px 40px 1fr auto}
+    .ref input{width:20px;height:20px}
+    .lvl{font-size:10.5px;padding:2px 7px}
+    .rundock{display:block;position:fixed;left:0;right:0;bottom:0;z-index:35;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-top:1px solid var(--stroke-soft);transform:translateY(110%);visibility:hidden;transition:transform .2s ease,visibility .2s}
+    .rundock.show{transform:none;visibility:visible}
+    .rundock .btn{width:100%;justify-content:center;padding:13px}
+    /* 入力中（キーボード表示中）は下部の固定バーを隠す */
+    body.typing .dock,body.typing .rundock{transform:translateY(110%);visibility:hidden}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= App bar ================= -->
+<header class="appbar">
+  <div class="appbar-in">
+    <div class="brand">DROP<i>.</i> Coach<small>POST IMPROVEMENT</small></div>
+    <nav class="stepper" aria-label="ステップ">
+      <button type="button" class="step-tab active" id="tab1"><b>01</b><span class="lt" id="tab1Lt">投稿を選ぶ</span></button>
+      <span class="step-line"></span>
+      <button type="button" class="step-tab" id="tab2" disabled><b>02</b><span class="lt">目的を決めて分析</span></button>
+    </nav>
+    <div class="appbar-meta">
+      <span>データ更新 <b id="metaUpdated">–</b></span>
+      <span id="userBox" hidden>Name <b id="userName">–</b> <button type="button" class="link-btn" id="logoutBtn">ログアウト</button></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ================= STEP 1 ================= -->
+  <section id="step1">
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Step 01</div>
+        <h1 id="s1Title">改善したい投稿を選ぶ</h1>
+        <p id="s1Desc">全投稿からご自身の投稿をクリックして選択してください。ユーザー名・性別・年齢層で絞り込めます。</p>
+      </div>
+    </div>
+
+    <!-- 分析モード -->
+    <div class="modes" role="radiogroup" aria-label="分析のしかた">
+      <button type="button" class="mode" data-mode="posted" role="radio" aria-checked="true">
+        <span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5"/><rect x="13.5" y="3" width="7.5" height="7.5"/><rect x="3" y="13.5" width="7.5" height="7.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5"/></svg></span>
+        <span><b>投稿済みを改善</b><small>DROP の投稿から選んで分析</small></span>
+      </button>
+      <button type="button" class="mode" data-mode="draft" role="radio" aria-checked="false">
+        <span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
+        <span><b>投稿前にチェック</b><small>画像とコメントを入れて分析</small></span>
+      </button>
+    </div>
+
+    <!-- モード①：投稿済みの投稿を選ぶ -->
+    <div id="postedPane">
+    <div class="filters">
+      <div class="f-top">
+        <div class="f-group">
+          <div class="f-title">ユーザー名</div>
+          <label class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input type="search" id="fName" list="nameList" placeholder="ユーザー名で検索（例：ABC本社ビル）" autocomplete="off" enterkeyhint="search" />
+            <datalist id="nameList"></datalist>
+          </label>
+        </div>
+        <div class="f-foot">
+          <span><b id="fCount">0</b> 件 / 全 <span id="fTotal">0</span> 件</span>
+          <button type="button" class="link-btn" id="fReset">条件をクリア</button>
+        </div>
+      </div>
+      <details class="fold f-more" id="fMore">
+        <summary><span class="chev"></span>詳細フィルタ<span class="fx">（性別・年齢層・並び順）</span><span class="fold-state" id="fMoreState">未設定</span></summary>
+        <div class="f-more-body">
+          <div class="f-group"><div class="f-title">性別</div><div class="chips" id="fGender"></div></div>
+          <div class="f-group"><div class="f-title">年齢層</div><div class="chips" id="fAge"></div></div>
+          <div class="f-group">
+            <div class="f-title">並び順</div>
+            <select class="sel" id="fSort">
+              <option value="new">投稿日が新しい順</option>
+              <option value="like">いいねが多い順</option>
+              <option value="pv">PVが多い順</option>
+            </select>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="grid" id="postGrid"><div class="empty"><b>読み込み中…</b>投稿データを取得しています</div></div>
+    </div>
+
+    <!-- モード②：投稿前チェック（画像とコメントをアップロード） -->
+    <div id="draftPane" hidden>
+      <div class="draft">
+        <div class="panel">
+          <div class="lbl">画像<span>1 枚・任意（推奨）</span></div>
+          <input type="file" id="dFile" class="vh" accept="image/*" aria-label="画像を選ぶ" />
+          <label class="pick" id="dPick" for="dFile"></label>
+          <div class="pick-cap" id="dPickCap" hidden><span>枠内がアプリでの表示イメージ（16:9）</span><span id="dImgSize"></span></div>
+          <div class="pick-acts" id="dPickActs" hidden>
+            <label class="btn ghost sm" for="dFile">選び直す</label>
+            <button type="button" class="btn ghost sm" id="dImgView">全体を見る</button>
+            <button type="button" class="btn ghost sm" id="dImgDel">削除</button>
+          </div>
+          <div class="d-err" id="dErr" hidden></div>
+        </div>
+        <div class="panel">
+          <div class="lbl"><label for="dText">コメント（投稿本文）</label><span>必須</span></div>
+          <textarea class="ta" id="dText" rows="6" maxlength="300" enterkeyhint="done" placeholder="例）螺旋階段を真下から見上げたら、手すりの曲線が最上階まで途切れずに続いていて、思わず足が止まりました。"></textarea>
+          <div class="cnt" id="dTextCnt">0 / 300</div>
+          <div class="lbl" style="margin-top:10px"><label for="dName">表示名</label><span>任意・施設アカウントの場合など</span></div>
+          <input type="text" class="inp" id="dName" maxlength="40" autocomplete="off" placeholder="例：ABC本社ビル" />
+          <div class="guide"><b>AI はこの順でチェックします</b>
+            <ol>
+              <li>コメントに<b>あなた自身の視点・気づき</b>があるか（最優先）</li>
+              <li>画像がその視点・気づきと<b>一致しているか</b></li>
+              <li>参考投稿と比べた写真・書き方など</li>
+            </ol>
+          </div>
+          <div class="hint">入力内容はこの端末のブラウザに一時保存されます（画像はタブを閉じると消えます）。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STEP 2 ================= -->
+  <section id="step2" hidden>
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Step 02</div>
+        <h1 id="s2Title">目的を決めて AI に改善案を聞く</h1>
+        <p id="s2Desc">目的に合った上位投稿を参考に、選んだ投稿の具体的な改善案を AI が提示します。</p>
+      </div>
+      <button type="button" class="btn ghost" id="backBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H6"/><path d="M11 6l-6 6 6 6"/></svg><span class="bt" id="backLt">投稿を選び直す</span>
+      </button>
+    </div>
+
+    <div class="s2">
+      <!-- 対象投稿 -->
+      <aside class="target" id="targetCard"></aside>
+
+      <div class="stack">
+        <!-- 目的 -->
+        <div class="panel">
+          <div class="ph"><h2><span class="n">A</span>改善の目的</h2><span class="sub">目的に応じて参考にする上位投稿が変わります</span></div>
+          <div class="goals" id="goals">
+            <button type="button" class="goal pv" data-goal="pv">
+              <span class="gi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span><b>PVを上げる</b><small>もっと開いて見てもらう<br>参考：PV 上位</small></span>
+            </button>
+            <button type="button" class="goal like" data-goal="like">
+              <span class="gi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>
+              <span><b>いいねを増やす</b><small>共感・反応を得る<br>参考：いいね上位</small></span>
+            </button>
+            <button type="button" class="goal other" data-goal="other">
+              <span class="gi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></span>
+              <span><b>その他の目的</b><small>自由に記述する<br>参考：PV・いいね上位</small></span>
+            </button>
+          </div>
+          <div class="goal-note" id="goalNoteWrap" hidden>
+            <textarea class="ta" id="goalNote" rows="2" maxlength="200" placeholder="例）ガイドツアーへの参加申込みにつなげたい／建物の歴史に興味を持ってもらいたい"></textarea>
+            <div class="cnt" id="goalNoteCnt">0 / 200</div>
+          </div>
+        </div>
+
+        <!-- 参考投稿 -->
+        <div class="panel">
+          <div class="ph"><h2><span class="n">B</span>参考にする上位投稿</h2><span class="sub" id="refSub">–</span></div>
+          <div class="ref-tools">
+            <span>上位 <input type="number" class="num" id="refN" min="1" max="10" step="1" /> 件（1〜10）</span>
+            <label class="toggle"><input type="checkbox" id="refFilter" />Step 1 の絞り込み条件を参考投稿にも適用</label>
+            <label class="toggle"><input type="checkbox" id="sendImg" />画像も解析<span class="img-note" id="imgNote"></span></label>
+          </div>
+          <div class="refs" id="refList"></div>
+          <div class="ref-foot" id="refFoot">チェックを外した投稿は AI に送りません。選択中の投稿とテスト投稿は除外しています。行をクリックで詳細表示。</div>
+        </div>
+
+        <!-- 追加の指示（展開式） -->
+        <details class="panel fold fold-panel" id="instrFold">
+          <summary><span class="chev"></span><h2><span class="n">C</span>追加の指示</h2><span class="fold-state" id="optState">任意</span></summary>
+          <div class="fold-body">
+            <div class="lbl">よく使う指示<span>タップで追加／解除</span></div>
+            <div class="presets" id="presets"></div>
+            <textarea class="ta" id="instr" rows="5" maxlength="400" placeholder="例）イケフェスのガイドツアーへの誘導を意識した文章にしてください。絵文字は使わないでください。"></textarea>
+            <div class="cnt" id="instrCnt">0 / 400</div>
+            <div class="hint">入力内容はこのブラウザに保存され、プロンプトに追記されます。次に実行したときに反映されます<span class="pc">（入力欄で <kbd>Ctrl</kbd>+<kbd>Enter</kbd> でも実行）</span>。</div>
+          </div>
+        </details>
+
+        <!-- 実行 -->
+        <div class="panel" id="runPanel" style="border-top:3px solid var(--rich)">
+          <div class="runbar">
+            <button type="button" class="btn lg" id="runBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+              <span id="runLabel">改善案を生成</span>
+            </button>
+            <div class="run-note" id="runNote">–</div>
+            <div class="run-side"><button type="button" class="link-btn" id="forceBtn" hidden title="キャッシュを使わずに再生成します">再生成</button><span id="userBox2" hidden><b id="userName2">–</b> <button type="button" class="link-btn" id="logoutBtn2">ログアウト</button></span></div>
+          </div>
+          <form class="login" id="login" hidden autocomplete="on">
+            <label for="lName">Name</label>
+            <input type="text" id="lName" name="username" autocomplete="username" maxlength="40" placeholder="氏名・所属など" required />
+            <label for="lPw">パスワード</label>
+            <input type="password" id="lPw" autocomplete="current-password" required />
+            <button type="submit" class="btn" id="loginBtn">認証して実行</button>
+            <span class="err" id="loginErr"></span>
+            <span class="remember">Name とパスワードはこの端末のブラウザに保存され、次回から自動でログインします（ログアウトで削除）。</span>
+          </form>
+          <div class="status" id="status" hidden></div>
+        </div>
+
+        <!-- 結果 -->
+        <div class="panel" id="resultPanel">
+          <div class="ph"><h2><span class="n">✦</span>AI の改善提案</h2><span class="sub" id="resultMeta">未実行</span></div>
+          <div class="result" id="result">
+            <div class="placeholder"><b>まだ分析していません</b>目的と参考投稿を確認して、実行ボタンを押してください。</div>
+          </div>
+          <div class="status" id="logStatus" hidden></div>
+          <div class="note" id="sendNote">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、判断の参考としてご利用ください。送信するのは選択した投稿（投稿前チェックでは入力したコメント・表示名）と参考投稿の本文（一部）・いいね数・PV数・順位・投稿日時・性別・年代、「画像も解析」が ON のときは画像（アップロード画像を含め、このブラウザで長辺 512px に縮小したもの。位置情報などの撮影情報は含みません）、および入力した目的・追加指示のみで、アカウント ID・位置情報は送信しません。実行のたびに Name・目的・追加指示・参考投稿の ID・投稿前チェックのコメント・AI の改善提案を記録します（アップロード画像は記録しません）。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 選択ドック -->
+<div class="dock" id="dock">
+  <div class="dock-in">
+    <span id="dockImg"></span>
+    <div class="d-main">
+      <div class="d-cap" id="dockCap">SELECTED</div>
+      <div class="d-name" id="dockName">–</div>
+      <div class="d-text" id="dockText">–</div>
+    </div>
+    <button type="button" class="btn" id="toStep2"><span id="toStep2Lt">この投稿で次へ</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- スマホ用 実行ボタン -->
+<div class="rundock" id="runDock">
+  <button type="button" class="btn lg" id="runBtn2">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+    <span id="runLabel2">改善案を生成</span>
+  </button>
+</div>
+
+<!-- 投稿詳細モーダル -->
+<div class="modal" id="modal" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="modal-in">
+    <button type="button" class="modal-x" id="modalX" aria-label="閉じる">&times;</button>
+    <div class="modal-media" id="modalMedia"></div>
+    <div class="modal-body">
+      <div class="mn" id="modalName"></div>
+      <div class="badges" id="modalBadges"></div>
+      <div class="metrics" id="modalMetrics"></div>
+      <div class="md" id="modalDate"></div>
+      <div class="mt" id="modalText"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   設定
+   - GAS_URL : 改善案生成用 GAS（GAS_COACH.gs）の /exec URL
+   - LOG_URL : 実行ログ記録用 GAS（GAS_COACH_LOG.gs）の /exec URL。空文字ならログを送らない
+   - フロントから両 GAS を個別に呼ぶ（GAS 同士は通信しない）
+   - 呼び出し順：GAS_URL（改善案生成）→ 応答後に LOG_URL（参考投稿 ID・推論結果を含めて記録）
+===================================================================== */
+const CONFIG = {
+  DATA_SOURCES: ["json/mart_action_drop_engagement.json", "mart_action_drop_engagement.json"],
+  GAS_URL: "https://script.google.com/a/macros/tojormo.com/s/AKfycbylMnEUhNqEUvdl9H0BwLnM2jSvvNVaB8N6R5G81AMcuTfUn_8cUidihEp7OxJpIbTy/exec",
+  LOG_URL: "https://script.google.com/macros/s/AKfycbyNHDEqgVxZn9i1TLxLyngRdc27kFwNTGDho94S9Z-T5oalVPJdbuAr-KgQ7jLzzEiI/exec",
+  TIMEOUT_MS: 90000,        // 画像解析を含むため長め
+  SEND_IMAGES: true,        // 画像解析の初期値（UI で切替可）
+  IMG_REFS_MAX: 5,          // 画像を送る参考投稿の上限（上から順）。対象投稿 T は常に送る
+  IMG_MAX_EDGE: 512,        // ブラウザで縮小するときの長辺(px)
+  IMG_QUALITY: 0.8,         // 縮小後 JPEG の画質
+  IMG_TIMEOUT_MS: 8000,     // 画像 1 枚の取得タイムアウト
+  MAX_TEXT: 300,            // 本文の送信文字数上限（GAS 側 MAX_TEXT と合わせる）
+  MAX_INSTR: 400,           // 追加指示の上限
+  MAX_GOAL: 200,            // 「その他の目的」の上限
+  REF_N: 5, REF_N_MIN: 1, REF_N_MAX: 10,
+  SEND_NAME: true,          // 投稿者表示名も送る（施設アカウント中心のため既定 ON）
+  EXCLUDE: /^[\s　]*(テスト[\s　]*)+$/,
+  PRESETS: ["改善後の本文例を必ず出す", "絵文字を使わない", "120字以内にまとめる", "ガイドツアーへ誘導する"],
+  DRAFT_PREVIEW_EDGE: 1280, // 投稿前チェック：画面プレビュー用に縮小するときの長辺(px)（AI には IMG_MAX_EDGE で送る）
+  DRAFT_MAX_MB: 30,         // 投稿前チェック：選べる画像ファイルの上限(MB)
+  KEYS: { TOKEN: "dropCoachToken", LOG_TOKEN: "dropCoachLogToken", NAME: "dropCoachName", PW: "dropCoachPw", PREFS: "dropCoachPrefs",
+          DRAFT: "dropCoachDraft", DRAFT_IMG: "dropCoachDraftImg" }
+};
+
+/* ---------- 共通 ---------- */
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString("ja-JP");
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const gLabel = g => (g && String(g).trim() ? g : "未設定");
+const aLabel = a => (a && String(a).trim() ? a : "未設定");
+const ageKey = a => { const m = /(\d+)/.exec(a || ""); return m ? parseInt(m[1], 10) : Infinity; };
+const oneLine = s => String(s || "").replace(/\s+/g, " ").trim();
+const ICON = {
+  like: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  pv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+};
+const GOALS = {
+  pv:    { label: "PVを上げる",     basis: "PV 上位",           metric: "pv" },
+  like:  { label: "いいねを増やす", basis: "いいね上位",        metric: "like" },
+  other: { label: "その他の目的",   basis: "PV・いいね上位",     metric: "both" }
+};
+
+/* ---------- 状態 ---------- */
+let POSTS = [], STATS = null;
+const S = {
+  f: { name: "", genders: new Set(), ages: new Set(), sort: "new" },
+  selectedId: null, step: 1,
+  mode: "posted",           // posted＝投稿済みを改善 / draft＝投稿前にチェック
+  draft: { text: "", name: "", img: "", imgAi: "", w: 0, h: 0, sig: "" },
+  goal: "pv", goalNote: "", refN: CONFIG.REF_N, refFilter: false, refOff: new Set(),
+  instr: "", sendImages: CONFIG.SEND_IMAGES,
+  busy: false, lastKey: null, idMap: {}, pendingForce: false, timer: null
+};
+
+/* ---------- データ ---------- */
+async function loadData() {
+  let last;
+  for (const s of CONFIG.DATA_SOURCES) {
+    try { const r = await fetch(s); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); }
+    catch (e) { last = e; }
+  }
+  throw last;
+}
+function normalize(records) {
+  return records.map(r => {
+    const s = (r.sentence || "").trim();
+    return {
+      id: r.artwork_id, n: r.account_name || "", s,
+      g: r.gender || "", a: r.age_group || "", t: r.post_dated_at || "",
+      date: r.post_date || (r.post_dated_at || "").slice(0, 10),
+      thumb: r.image_file_path_thumbnail || "", img: r.image_file_path || r.image_file_path_thumbnail || "",
+      like: Number(r.like_count) || 0, pv: Number(r.pv_count) || 0,
+      ev: r.post_collab_event_name || "", test: CONFIG.EXCLUDE.test(s)
+    };
+  });
+}
+/* 同数は同順位（1,1,3…）。タイブレーク表示順：もう一方の指標 → 新しい順 */
+function rankBy(list, key, sub) {
+  const sorted = [...list].sort((a, b) => b[key] - a[key] || b[sub] - a[sub] || (b.t > a.t ? 1 : b.t < a.t ? -1 : 0));
+  let prev = null, rank = 0;
+  return sorted.map((p, i) => { if (p[key] !== prev) { rank = i + 1; prev = p[key]; } return { p, rank }; });
+}
+function buildStats() {
+  const base = POSTS.filter(p => !p.test);
+  const likeRank = new Map(rankBy(base, "like", "pv").map(x => [x.p.id, x.rank]));
+  const pvRank = new Map(rankBy(base, "pv", "like").map(x => [x.p.id, x.rank]));
+  const tl = base.reduce((s, p) => s + p.like, 0), tp = base.reduce((s, p) => s + p.pv, 0);
+  const r2 = v => Math.round(v * 100) / 100;
+  return {
+    base, likeRank, pvRank, total: base.length,
+    avgLike: base.length ? r2(tl / base.length) : 0,
+    avgPv: base.length ? r2(tp / base.length) : 0,
+    avgRate: tp ? Math.round(tl / tp * 1000) / 10 : 0,
+    event: [...new Set(base.map(p => p.ev).filter(Boolean))].join(", ")
+  };
+}
+const byId = id => POSTS.find(p => p.id === id);
+
+/* ---------- 分析対象（T）：投稿済みの投稿 or 投稿前の下書き ---------- */
+const DRAFT_ID = "__draft__";
+function draftPost() {
+  const d = S.draft;
+  if (!d.text.trim()) return null;
+  return { id: DRAFT_ID, draft: true, n: d.name.trim(), s: d.text.trim(), img: d.img, thumb: d.img, like: 0, pv: 0, g: "", a: "", t: "", date: "", test: false };
+}
+const postOf = id => (id === DRAFT_ID ? draftPost() : byId(id));
+const targetId = () => (S.mode === "draft" ? DRAFT_ID : S.selectedId);
+const targetPost = () => postOf(targetId());
+const canAnalyze = () => { const p = targetPost(); return !!STATS && !!p && !p.test; };
+const hashStr = str => { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36) + str.length.toString(36); };
+const passFilter = p => {
+  const q = S.f.name.trim().toLowerCase();
+  if (q && !p.n.toLowerCase().includes(q)) return false;
+  if (S.f.genders.size && !S.f.genders.has(p.g)) return false;
+  if (S.f.ages.size && !S.f.ages.has(p.a)) return false;
+  return true;
+};
+
+/* ---------- 設定の保存 ---------- */
+function savePrefs() {
+  try { localStorage.setItem(CONFIG.KEYS.PREFS, JSON.stringify({ mode: S.mode, goal: S.goal, goalNote: S.goalNote, refN: S.refN, refFilter: S.refFilter, instr: S.instr, sendImages: S.sendImages, instrOpen: $("instrFold").open, fMoreOpen: $("fMore").open })); } catch (e) {}
+}
+function loadPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(CONFIG.KEYS.PREFS) || "null");
+    if (!p) return;
+    if (p.mode === "draft" || p.mode === "posted") S.mode = p.mode;
+    if (GOALS[p.goal]) S.goal = p.goal;
+    S.goalNote = String(p.goalNote || "").slice(0, CONFIG.MAX_GOAL);
+    S.refN = clampN(p.refN);
+    S.refFilter = !!p.refFilter;
+    S.instr = String(p.instr || "").slice(0, CONFIG.MAX_INSTR);
+    if (typeof p.sendImages === "boolean") S.sendImages = p.sendImages;
+    $("instrFold").open = !!p.instrOpen;
+    $("fMore").open = !!p.fMoreOpen;
+  } catch (e) {}
+}
+function clampN(v) { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(CONFIG.REF_N_MAX, Math.max(CONFIG.REF_N_MIN, n)) : CONFIG.REF_N; }
+
+/* =====================================================================
+   STEP 1：投稿ビューワー
+===================================================================== */
+function buildFilters() {
+  const cnt = key => POSTS.reduce((m, p) => m.set(p[key], (m.get(p[key]) || 0) + 1), new Map());
+  const gc = cnt("g"), ac = cnt("a");
+  const genders = [...gc.keys()].sort((a, b) => (a === "") - (b === "") || gc.get(b) - gc.get(a) || a.localeCompare(b, "ja"));
+  const ages = [...ac.keys()].sort((a, b) => (a === "") - (b === "") || ageKey(a) - ageKey(b) || a.localeCompare(b, "ja"));
+  const chip = (t, v, l, n) => `<button type="button" class="chip" data-t="${t}" data-v="${esc(v)}">${esc(l)}<span>${n}</span></button>`;
+  $("fGender").innerHTML = genders.map(g => chip("g", g, gLabel(g), gc.get(g))).join("");
+  $("fAge").innerHTML = ages.map(a => chip("a", a, aLabel(a), ac.get(a))).join("");
+  document.querySelectorAll(".chip[data-t]").forEach(b => b.addEventListener("click", () => {
+    const set = b.dataset.t === "g" ? S.f.genders : S.f.ages, v = b.dataset.v;
+    set.has(v) ? set.delete(v) : set.add(v);
+    b.classList.toggle("on", set.has(v));
+    renderGrid();
+  }));
+  const names = [...new Set(POSTS.map(p => p.n).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+  $("nameList").innerHTML = names.map(n => `<option value="${esc(n)}"></option>`).join("");
+  $("fName").addEventListener("input", () => { S.f.name = $("fName").value; renderGrid(); });
+  $("fName").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+  $("fMore").addEventListener("toggle", savePrefs);
+  $("fSort").addEventListener("change", () => { S.f.sort = $("fSort").value; renderGrid(); });
+  $("fReset").addEventListener("click", () => {
+    S.f.name = ""; S.f.genders.clear(); S.f.ages.clear(); S.f.sort = "new";
+    $("fName").value = ""; $("fSort").value = "new";
+    document.querySelectorAll(".chip[data-t]").forEach(b => b.classList.remove("on"));
+    renderGrid();
+  });
+}
+function syncFilterState() {
+  const on = [S.f.genders.size && `性別 ${S.f.genders.size}`, S.f.ages.size && `年齢層 ${S.f.ages.size}`, S.f.sort !== "new" && "並び順"].filter(Boolean);
+  $("fMoreState").textContent = on.length ? on.join("・") + " を適用中" : "未設定";
+  $("fMoreState").classList.toggle("on", !!on.length);
+}
+function renderGrid() {
+  syncFilterState();
+  const list = POSTS.filter(passFilter);
+  const sorters = {
+    new: (a, b) => (b.t > a.t ? 1 : b.t < a.t ? -1 : 0),
+    like: (a, b) => b.like - a.like || b.pv - a.pv,
+    pv: (a, b) => b.pv - a.pv || b.like - a.like
+  };
+  list.sort(sorters[S.f.sort]);
+  $("fCount").textContent = list.length;
+  $("fTotal").textContent = POSTS.length;
+  if (!list.length) { $("postGrid").innerHTML = '<div class="empty"><b>該当する投稿がありません</b>絞り込み条件を変更してください</div>'; return; }
+  $("postGrid").innerHTML = list.map(p => `
+    <button type="button" class="pcard${p.id === S.selectedId ? " sel" : ""}" data-id="${esc(p.id)}">
+      <div class="media">${p.thumb ? `<img src="${esc(p.thumb)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : ""}<span class="check">${ICON.check}</span></div>
+      <div class="body">
+        <div class="name" title="${esc(p.n)}">${esc(p.n || "投稿者名なし")}</div>
+        <div class="badges"><span class="badge g">${esc(gLabel(p.g))}</span><span class="badge a">${esc(aLabel(p.a))}</span>${p.test ? '<span class="badge test">テスト投稿</span>' : ""}</div>
+        <div class="text">${esc(oneLine(p.s))}</div>
+        <div class="foot">
+          <div class="metrics"><span class="lk">${ICON.like}${fmt(p.like)}</span><span class="pv">${ICON.pv}${fmt(p.pv)}</span></div>
+          <span class="pdate">${esc(p.t.slice(0, 16))}</span>
+        </div>
+      </div>
+    </button>`).join("");
+  $("postGrid").querySelectorAll(".pcard").forEach(c => c.addEventListener("click", () => selectPost(c.dataset.id)));
+}
+function selectPost(id) {
+  S.selectedId = S.selectedId === id ? null : id;
+  $("postGrid").querySelectorAll(".pcard").forEach(c => c.classList.toggle("sel", c.dataset.id === S.selectedId));
+  S.refOff.clear(); S.lastKey = null;
+  syncDock(); syncTabs();
+}
+function syncDock() {
+  const draft = S.mode === "draft";
+  const p = targetPost();
+  $("dock").classList.toggle("show", !!p && S.step === 1);
+  if (!p) return;
+  $("dockImg").innerHTML = p.thumb ? `<img src="${esc(p.thumb)}" alt="" onerror="this.style.visibility='hidden'">` : '<span class="ph0" style="width:48px;height:48px;display:block;background:#3a3742"></span>';
+  $("dockCap").textContent = draft ? (p.img ? "DRAFT" : "DRAFT・画像なし") : "SELECTED";
+  $("dockName").textContent = draft ? (p.n || "投稿前チェック") : (p.n || "投稿者名なし");
+  $("dockText").textContent = oneLine(p.s);
+  $("toStep2Lt").textContent = draft ? "この内容で次へ" : "この投稿で次へ";
+  $("toStep2").disabled = p.test;
+  $("toStep2").title = p.test ? "テスト投稿は分析できません" : "";
+}
+
+/* =====================================================================
+   STEP 1：分析モード切替・投稿前チェック（画像とコメントのアップロード）
+===================================================================== */
+function setMode(m) {
+  if (m !== "posted" && m !== "draft") return;
+  const changed = S.mode !== m;
+  S.mode = m;
+  const draft = m === "draft";
+  document.querySelectorAll(".mode").forEach(b => { const on = b.dataset.mode === m; b.classList.toggle("on", on); b.setAttribute("aria-checked", on ? "true" : "false"); });
+  $("postedPane").hidden = draft; $("draftPane").hidden = !draft;
+  $("s1Title").textContent = draft ? "投稿前の画像とコメントを入れる" : "改善したい投稿を選ぶ";
+  $("s1Desc").textContent = draft
+    ? "投稿する予定の画像とコメントを入れると、上位投稿と比べて投稿前にチェックします。"
+    : "全投稿からご自身の投稿をクリックして選択してください。ユーザー名・性別・年齢層で絞り込めます。";
+  $("tab1Lt").textContent = draft ? "内容を入力" : "投稿を選ぶ";
+  if (changed) { S.refOff.clear(); savePrefs(); }
+  syncDock(); syncTabs();
+}
+document.querySelectorAll(".mode").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+
+function saveDraft() {
+  try { localStorage.setItem(CONFIG.KEYS.DRAFT, JSON.stringify({ text: S.draft.text, name: S.draft.name })); } catch (e) {}
+  // 画像は容量が大きいため sessionStorage（タブを閉じると消える。iPhone で写真選択後にページが再読込されても残る）
+  try {
+    if (S.draft.img) sessionStorage.setItem(CONFIG.KEYS.DRAFT_IMG, JSON.stringify({ img: S.draft.img, imgAi: S.draft.imgAi, w: S.draft.w, h: S.draft.h }));
+    else sessionStorage.removeItem(CONFIG.KEYS.DRAFT_IMG);
+  } catch (e) { console.warn("下書き画像を一時保存できませんでした（容量超過）", e); }
+}
+function loadDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(CONFIG.KEYS.DRAFT) || "null");
+    if (d) { S.draft.text = String(d.text || "").slice(0, CONFIG.MAX_TEXT); S.draft.name = String(d.name || "").slice(0, 40); }
+  } catch (e) {}
+  try {
+    const im = JSON.parse(sessionStorage.getItem(CONFIG.KEYS.DRAFT_IMG) || "null");
+    if (im && /^data:image\/jpeg;base64,/.test(im.img || "") && /^data:image\/jpeg;base64,/.test(im.imgAi || "")) {
+      Object.assign(S.draft, { img: im.img, imgAi: im.imgAi, w: Number(im.w) || 0, h: Number(im.h) || 0, sig: hashStr(im.imgAi) });
+    }
+  } catch (e) {}
+}
+function draftErr(msg) { $("dErr").textContent = msg || ""; $("dErr").hidden = !msg; }
+const PICK_EMPTY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><b>タップして画像を選ぶ</b><span>写真を撮る・ライブラリから選ぶ</span>`;
+function renderDraft() {
+  const d = S.draft, has = !!d.img;
+  $("dPick").classList.toggle("has", has);
+  $("dPick").innerHTML = has ? `<img src="${esc(d.img)}" alt="アップロードした画像（16:9 表示イメージ）">` : PICK_EMPTY;
+  $("dPickCap").hidden = !has; $("dPickActs").hidden = !has;
+  $("dImgSize").textContent = has && d.w ? `${d.w}×${d.h}` : "";
+  if ($("dText").value !== d.text) $("dText").value = d.text;
+  if ($("dName").value !== d.name) $("dName").value = d.name;
+  $("dTextCnt").textContent = `${d.text.length} / ${CONFIG.MAX_TEXT}`;
+}
+/** 端末の画像ファイルをデコード（EXIF の向きを反映）。HEIC など createImageBitmap で読めない形式は <img> で再試行 */
+async function decodeFile(file) {
+  if ("createImageBitmap" in window) {
+    try {
+      const b = await createImageBitmap(file, { imageOrientation: "from-image" });
+      return { el: b, w: b.width, h: b.height, close: () => b.close && b.close() };
+    } catch (e) { /* <img> で再試行 */ }
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("decode error")); i.src = url; });
+    return { el: img, w: img.naturalWidth, h: img.naturalHeight, close: () => URL.revokeObjectURL(url) };
+  } catch (e) { URL.revokeObjectURL(url); throw e; }
+}
+async function onDraftFile(file) {
+  draftErr("");
+  if (!file) return;
+  if (file.type && !/^image\//.test(file.type)) { draftErr("画像ファイルを選んでください"); return; }
+  if (file.size > CONFIG.DRAFT_MAX_MB * 1024 * 1024) { draftErr(`画像が大きすぎます（${CONFIG.DRAFT_MAX_MB}MB まで）`); return; }
+  $("dPick").classList.add("loading");
+  try {
+    const src = await decodeFile(file);
+    try {
+      if (!src.w || !src.h) throw new Error("empty image");
+      S.draft.img = drawToDataUrl(src.el, src.w, src.h, CONFIG.DRAFT_PREVIEW_EDGE, 0.85);
+      S.draft.imgAi = drawToDataUrl(src.el, src.w, src.h, CONFIG.IMG_MAX_EDGE, CONFIG.IMG_QUALITY);
+      S.draft.w = src.w; S.draft.h = src.h; S.draft.sig = hashStr(S.draft.imgAi);
+    } finally { src.close(); }
+  } catch (e) {
+    console.warn(e);
+    draftErr("この画像を読み込めませんでした。JPEG / PNG の画像を選んでください");
+  } finally {
+    $("dPick").classList.remove("loading");
+    $("dFile").value = "";   // 同じ画像を選び直しても change が発火するように
+  }
+  saveDraft(); renderDraft(); syncDock(); syncTabs();
+}
+$("dFile").addEventListener("change", () => onDraftFile($("dFile").files && $("dFile").files[0]));
+$("dImgDel").addEventListener("click", () => {
+  Object.assign(S.draft, { img: "", imgAi: "", w: 0, h: 0, sig: "" });
+  draftErr(""); saveDraft(); renderDraft(); syncDock(); syncTabs();
+});
+$("dImgView").addEventListener("click", () => { const p = draftPost(); openModal(p || { draft: true, n: "", s: "（コメント未入力）", img: S.draft.img }); });
+$("dText").addEventListener("input", () => {
+  S.draft.text = $("dText").value.slice(0, CONFIG.MAX_TEXT);
+  $("dTextCnt").textContent = `${S.draft.text.length} / ${CONFIG.MAX_TEXT}`;
+  saveDraft(); syncDock(); syncTabs();
+});
+$("dName").addEventListener("input", () => { S.draft.name = $("dName").value.slice(0, 40); saveDraft(); syncDock(); });
+// 入力中はキーボードと重ならないよう、下部の固定バー（ドック・実行ボタン）を隠す
+const TYPING_SEL = "textarea, input:not([type]), input[type=text], input[type=search], input[type=number], input[type=password]";
+document.addEventListener("focusin", e => { if (e.target.matches && e.target.matches(TYPING_SEL)) document.body.classList.add("typing"); });
+document.addEventListener("focusout", e => { if (e.target.matches && e.target.matches(TYPING_SEL)) setTimeout(() => { if (!document.activeElement || !document.activeElement.matches(TYPING_SEL)) document.body.classList.remove("typing"); }, 50); });
+
+/* =====================================================================
+   画面切替
+===================================================================== */
+function syncTabs() {
+  $("tab1").classList.toggle("active", S.step === 1);
+  $("tab2").classList.toggle("active", S.step === 2);
+  $("tab1").classList.toggle("done", S.step === 2);
+  $("tab2").disabled = !canAnalyze();
+}
+function goStep(n) {
+  if (n === 2 && !canAnalyze()) return;
+  S.step = n;
+  const draft = S.mode === "draft";
+  $("s2Title").textContent = draft ? "目的を決めてチェック" : "目的を決めて AI に改善案を聞く";
+  $("s2Desc").textContent = draft
+    ? "目的に合った上位投稿と比べて、投稿前のコメントと画像を AI がチェックします。"
+    : "目的に合った上位投稿を参考に、選んだ投稿の具体的な改善案を AI が提示します。";
+  $("backLt").textContent = draft ? "内容を編集する" : "投稿を選び直す";
+  $("step1").hidden = n !== 1; $("step2").hidden = n !== 2;
+  $(n === 1 ? "step1" : "step2").classList.add("fade");
+  if (n === 2) { renderTarget(); renderGoal(); renderRefs(); resetResultIfChanged(); }
+  syncDock(); syncTabs(); syncButtons(); syncRunDock();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("tab1").addEventListener("click", () => goStep(1));
+$("tab2").addEventListener("click", () => goStep(2));
+$("toStep2").addEventListener("click", () => goStep(2));
+$("backBtn").addEventListener("click", () => goStep(1));
+
+/* =====================================================================
+   STEP 2
+===================================================================== */
+function renderTarget() {
+  const p = targetPost(); if (!p) return;
+  if (p.draft) {
+    $("targetCard").innerHTML = `
+      <div class="media" id="tMedia">${p.img ? `<img src="${esc(p.img)}" alt="アップロードした画像">` : '<div class="noimg">画像なし</div>'}</div>
+      <div class="tb">
+        <div class="eyebrow">Draft ・ 投稿前</div>
+        <div class="tname">${esc(p.n || "投稿前チェック")}</div>
+        <div class="draft-flag">まだ投稿していないため PV・いいねはありません。上位投稿と比べて内容をチェックします。${p.img ? "" : "<br>画像が無いため本文のみで分析します。"}</div>
+      </div>
+      <div class="ttext-wrap"><div class="ttext">${esc(p.s)}</div></div>`;
+    if (p.img) $("tMedia").addEventListener("click", () => openModal(p));
+    return;
+  }
+  const lr = STATS.likeRank.get(p.id), pr = STATS.pvRank.get(p.id);
+  const rate = p.pv > 0 ? (p.like / p.pv * 100).toFixed(1) + "%" : "–";
+  $("targetCard").innerHTML = `
+    <div class="media" id="tMedia">${p.img ? `<img src="${esc(p.img)}" alt="選択した投稿の画像" onerror="this.style.visibility='hidden'">` : ""}</div>
+    <div class="tb">
+      <div class="eyebrow">Your Post</div>
+      <div class="tname">${esc(p.n || "投稿者名なし")}</div>
+      <div class="badges"><span class="badge g">${esc(gLabel(p.g))}</span><span class="badge a">${esc(aLabel(p.a))}</span></div>
+      <div class="kv">
+        <div class="lk"><small>いいね</small><b>${fmt(p.like)}</b><em>${lr} 位 / ${STATS.total}</em></div>
+        <div class="pv"><small>PV</small><b>${fmt(p.pv)}</b><em>${pr} 位 / ${STATS.total}</em></div>
+        <div><small>いいね率</small><b>${rate}</b><em>全体 ${STATS.avgRate}%</em></div>
+      </div>
+      <div class="tmeta"><span>${esc(p.t)}</span><span>平均 いいね ${STATS.avgLike} ・ PV ${STATS.avgPv}</span></div>
+    </div>
+    <div class="ttext-wrap"><div class="ttext">${esc(p.s)}</div></div>`;
+  $("tMedia").addEventListener("click", () => openModal(p));
+}
+function renderGoal() {
+  document.querySelectorAll(".goal").forEach(b => b.classList.toggle("on", b.dataset.goal === S.goal));
+  $("goalNoteWrap").hidden = S.goal !== "other";
+  $("goalNote").value = S.goalNote;
+  $("goalNoteCnt").textContent = `${S.goalNote.length} / ${CONFIG.MAX_GOAL}`;
+}
+document.querySelectorAll(".goal").forEach(b => b.addEventListener("click", () => {
+  S.goal = b.dataset.goal; S.refOff.clear(); savePrefs(); renderGoal(); renderRefs();
+  if (S.goal === "other") $("goalNote").focus();
+}));
+$("goalNote").addEventListener("input", () => {
+  S.goalNote = $("goalNote").value.slice(0, CONFIG.MAX_GOAL);
+  $("goalNoteCnt").textContent = `${S.goalNote.length} / ${CONFIG.MAX_GOAL}`;
+  syncRunNote();
+});
+$("goalNote").addEventListener("change", () => { savePrefs(); checkStale(); });
+
+/* 参考投稿：目的に応じて上位を抽出（選択中の投稿・テスト投稿は除外） */
+function buildRefs() {
+  const ex = S.mode === "draft" ? null : S.selectedId;
+  const pool = STATS.base.filter(p => p.id !== ex && (!S.refFilter || passFilter(p)));
+  const n = S.refN;
+  const top = (key, sub) => rankBy(pool, key, sub).filter(x => x.p[key] > 0).slice(0, n);
+  const picked = new Map();
+  const add = (list, g) => list.forEach(x => { if (!picked.has(x.p.id)) picked.set(x.p.id, { p: x.p, groups: [] }); picked.get(x.p.id).groups.push(g); });
+  if (S.goal === "pv") add(top("pv", "like"), "pv_top");
+  else if (S.goal === "like") add(top("like", "pv"), "like_top");
+  else { add(top("like", "pv"), "like_top"); add(top("pv", "like"), "pv_top"); }
+  // 表示順位は「参考母集団内」の順位
+  const lrk = new Map(rankBy(pool, "like", "pv").map(x => [x.p.id, x.rank]));
+  const prk = new Map(rankBy(pool, "pv", "like").map(x => [x.p.id, x.rank]));
+  return { pool, refs: [...picked.values()].map(r => ({ ...r, lr: lrk.get(r.p.id), pr: prk.get(r.p.id) })) };
+}
+function renderRefs() {
+  $("refN").value = S.refN;
+  $("refFilter").checked = S.refFilter;
+  $("sendImg").checked = S.sendImages;
+  const { pool, refs } = buildRefs();
+  const g = GOALS[S.goal];
+  $("refSub").textContent = `${g.basis} ${S.refN} 件${S.goal === "other" ? "ずつ（重複は 1 件）" : ""} ・ 母集団 ${pool.length} 件${S.refFilter ? "（絞り込み適用）" : ""}`;
+  if (!refs.length) {
+    $("refList").innerHTML = '<div class="empty" style="padding:26px"><b>参考にできる投稿がありません</b>母集団の条件を見直してください（指標が 0 の投稿は除外しています）</div>';
+    syncRunNote(); return;
+  }
+  let i = 0;
+  $("refList").innerHTML = refs.map(r => {
+    const p = r.p, on = !S.refOff.has(p.id);
+    const rid = on ? "R" + (++i) : "";
+    const img = on && S.sendImages && p.thumb && i <= CONFIG.IMG_REFS_MAX;
+    const metric = S.goal === "like" ? "like" : "pv";
+    const rank = S.goal === "like" ? r.lr : S.goal === "pv" ? r.pr : Math.min(r.lr, r.pr);
+    const tags = S.goal === "other" ? r.groups.map(x => x === "like_top" ? '<span class="gtag lk">いいね</span>' : '<span class="gtag pv">PV</span>').join("") : "";
+    const main = S.goal === "like"
+      ? `<div class="rv lk"><b>${fmt(p.like)}</b><span>いいね ／ PV ${fmt(p.pv)}</span></div>`
+      : S.goal === "pv"
+        ? `<div class="rv pv"><b>${fmt(p.pv)}</b><span>PV ／ いいね ${fmt(p.like)}</span></div>`
+        : `<div class="rv"><b style="font-size:13px"><span style="color:var(--rich)">♥ ${fmt(p.like)}</span>　<span style="color:var(--pv)">PV ${fmt(p.pv)}</span></b></div>`;
+    return `<div class="ref${on ? "" : " off"}${rank <= 3 ? " top" : ""}" data-id="${esc(p.id)}">
+      <input type="checkbox" ${on ? "checked" : ""} aria-label="参考投稿に含める">
+      <div class="rk">${S.goal === "other" ? "" : rank}</div>
+      ${p.thumb ? `<img src="${esc(p.thumb)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<div class="ph0"></div>'}
+      <div class="rm"><div class="rn">${rid ? `<span class="rid">${rid}</span>` : ""}${esc(p.n || "投稿者名なし")}${tags}${img ? '<span class="imgmark" title="画像も AI に送ります">IMG</span>' : ""}</div><div class="rt">${esc(oneLine(p.s))}</div></div>
+      ${main}
+    </div>`;
+  }).join("");
+  $("refList").querySelectorAll(".ref").forEach(row => {
+    const id = row.dataset.id, cb = row.querySelector("input");
+    cb.addEventListener("click", e => { e.stopPropagation(); cb.checked ? S.refOff.delete(id) : S.refOff.add(id); renderRefs(); checkStale(); });
+    row.addEventListener("click", () => { const p = byId(id); if (p) openModal(p); });
+  });
+  $("refFoot").textContent = `チェックを外した投稿は AI に送りません。${S.mode === "draft" ? "" : "選択中の投稿と"}テスト投稿は除外しています。行をタップで詳細表示。`;
+  const nImg = (targetPost()?.thumb ? 1 : 0) + Math.min(CONFIG.IMG_REFS_MAX, refs.filter(r => !S.refOff.has(r.p.id) && r.p.thumb).length);
+  $("imgNote").textContent = S.sendImages ? `（${nImg} 枚）` : "";
+  syncRunNote();
+}
+$("refN").addEventListener("change", () => { S.refN = clampN($("refN").value); S.refOff.clear(); savePrefs(); renderRefs(); checkStale(); });
+$("refN").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("refN").dispatchEvent(new Event("change")); } });
+$("sendImg").addEventListener("change", () => { S.sendImages = $("sendImg").checked; savePrefs(); renderRefs(); checkStale(); });
+$("refFilter").addEventListener("change", () => { S.refFilter = $("refFilter").checked; S.refOff.clear(); savePrefs(); renderRefs(); checkStale(); });
+
+/* ---------- 追加指示 ---------- */
+function initPrompt() {
+  $("instr").value = S.instr;
+  $("presets").innerHTML = CONFIG.PRESETS.map(t => `<button type="button" class="chip" data-preset="${esc(t)}">${esc(t)}</button>`).join("");
+  const lines = () => $("instr").value.split("\n").map(s => s.trim()).filter(Boolean);
+  const syncPresets = () => { const l = lines(); $("presets").querySelectorAll("[data-preset]").forEach(b => b.classList.toggle("on", l.includes(b.dataset.preset))); };
+  const syncCnt = () => { $("instrCnt").textContent = `${$("instr").value.length} / ${CONFIG.MAX_INSTR}`; syncOptState(); };
+  $("presets").querySelectorAll("[data-preset]").forEach(b => b.addEventListener("click", () => {
+    const l = lines(), t = b.dataset.preset;
+    $("instr").value = (l.includes(t) ? l.filter(x => x !== t) : [...l, t]).join("\n").slice(0, CONFIG.MAX_INSTR);
+    S.instr = $("instr").value; syncPresets(); syncCnt(); savePrefs(); checkStale();
+  }));
+  $("instr").addEventListener("input", () => { S.instr = $("instr").value; syncPresets(); syncCnt(); });
+  $("instr").addEventListener("change", () => { savePrefs(); checkStale(); });
+  syncPresets(); syncCnt();
+  $("instrFold").addEventListener("toggle", savePrefs);
+}
+function syncOptState() {
+  const on = !!S.instr.trim();
+  $("optState").textContent = on ? "反映中" : "任意";
+  $("optState").classList.toggle("on", on);
+}
+function ctrlEnter(e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); savePrefs(); run(false); } }
+["instr", "goalNote"].forEach(id => $(id).addEventListener("keydown", ctrlEnter));
+
+/* =====================================================================
+   AI 呼び出し（GAS → Azure OpenAI）
+===================================================================== */
+function configured(url) { return !!url && !/X{6,}/.test(url); }
+function logEnabled() { return configured(CONFIG.LOG_URL); }
+function getToken(key) {
+  try { const t = JSON.parse(localStorage.getItem(key) || "null"); if (t && t.token && t.exp > Date.now() + 30000) return t.token; } catch (e) {}
+  localStorage.removeItem(key); return null;
+}
+function setToken(token, sec, key) { localStorage.setItem(key, JSON.stringify({ token, exp: Date.now() + sec * 1000 })); }
+function loggedIn() { return !!getToken(CONFIG.KEYS.TOKEN) && (!logEnabled() || !!getToken(CONFIG.KEYS.LOG_TOKEN)); }
+function clearTokens() { localStorage.removeItem(CONFIG.KEYS.TOKEN); localStorage.removeItem(CONFIG.KEYS.LOG_TOKEN); syncButtons(); }
+function getName() { try { return localStorage.getItem(CONFIG.KEYS.NAME) || ""; } catch (e) { return ""; } }
+/* Name・パスワードをこのブラウザに保存（パスワードは平文で localStorage に入る点に注意。ログアウトで削除） */
+function getCreds() {
+  try { const n = localStorage.getItem(CONFIG.KEYS.NAME) || "", pw = localStorage.getItem(CONFIG.KEYS.PW) || ""; return n && pw ? { name: n, pw } : null; } catch (e) { return null; }
+}
+function saveCreds(name, pw) { try { localStorage.setItem(CONFIG.KEYS.NAME, name); localStorage.setItem(CONFIG.KEYS.PW, pw); } catch (e) {} }
+function clearPw() { try { localStorage.removeItem(CONFIG.KEYS.PW); } catch (e) {} }
+async function doLogin(name, pw) {
+  const [res, logRes] = await Promise.all([
+    post({ action: "login", name, password: pw }, CONFIG.GAS_URL),
+    logEnabled() ? post({ action: "login", name, password: pw }, CONFIG.LOG_URL) : Promise.resolve(null)
+  ]);
+  if (!res.ok) return { ok: false, code: res.code, message: res.message || "認証に失敗しました" };
+  setToken(res.token, res.expires_in, CONFIG.KEYS.TOKEN);
+  if (logRes && !logRes.ok) return { ok: false, code: logRes.code, message: "ログ記録用の認証に失敗しました：" + (logRes.message || "不明なエラー") };
+  if (logRes) setToken(logRes.token, logRes.expires_in, CONFIG.KEYS.LOG_TOKEN);
+  return { ok: true };
+}
+async function autoLogin() {
+  const c = getCreds(); if (!c) return false;
+  status('<span class="spin"></span><span>保存済みの情報でログインしています…</span>');
+  const r = await doLogin(c.name, c.pw);
+  if (r.ok) { status(""); syncButtons(); return true; }
+  if (r.code === "AUTH") clearPw();
+  S.authMsg = r.message;
+  return false;
+}
+
+async function post(body, url) {
+  const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
+  try {
+    // text/plain で送るとプリフライトが発生せず GAS でも CORS エラーにならない
+    const res = await fetch(url, { method: "POST", redirect: "follow", signal: ctrl.signal, headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return await res.json();
+  } catch (e) {
+    if (e.name === "AbortError") return { ok: false, code: "TIMEOUT", message: `応答がありませんでした（${CONFIG.TIMEOUT_MS / 1000} 秒）。時間をおいて再生成してください` };
+    return { ok: false, code: "NETWORK", message: "GAS に接続できませんでした（" + e.message + "）" };
+  } finally { clearTimeout(to); }
+}
+
+function toPayloadPost(p, id, extra) {
+  const text = oneLine(p.s);
+  const o = {
+    id, like: p.like, pv: p.pv, like_rate: p.pv > 0 ? Math.round(p.like / p.pv * 1000) / 10 : 0,
+    like_rank: STATS.likeRank.get(p.id), pv_rank: STATS.pvRank.get(p.id),
+    date: p.date, hour: (p.t || "").slice(11, 13), gender: gLabel(p.g), age: aLabel(p.a),
+    text_len: text.length, text: text.slice(0, CONFIG.MAX_TEXT), ...extra
+  };
+  if (CONFIG.SEND_NAME && p.n) o.name = p.n;
+  return o;
+}
+/* =====================================================================
+   画像（方式 B）：画像サーバーは GAS（Google のサーバー）からのアクセスを 403 で拒否するため、
+   利用者のブラウザで画像を取得 → 長辺 IMG_MAX_EDGE px の JPEG に縮小 → data URL にして GAS に渡す。
+   ブラウザで読み取れない場合（CORS 非許可など）は URL だけ送り、GAS 側の取得にフォールバックする。
+===================================================================== */
+const IMG_CACHE = new Map();   // url → data URL（同じ画像の再取得・再縮小を避ける）
+function drawToDataUrl(src, w, h, edge = CONFIG.IMG_MAX_EDGE, quality = CONFIG.IMG_QUALITY) {
+  const k = Math.min(1, edge / Math.max(w, h));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);   // 透過 PNG の背景を白に
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", quality);              // 読み取り不可（tainted）なら例外
+}
+/** 1) fetch（CORS）で取得 */
+async function viaFetch(url) {
+  const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), CONFIG.IMG_TIMEOUT_MS);
+  try {
+    const r = await fetch(url, { mode: "cors", credentials: "omit", cache: "force-cache", signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    if ("createImageBitmap" in window) {
+      const bmp = await createImageBitmap(blob);
+      try { return drawToDataUrl(bmp, bmp.width, bmp.height); } finally { bmp.close && bmp.close(); }
+    }
+    const objUrl = URL.createObjectURL(blob);
+    try { return await viaImg(objUrl, false); } finally { URL.revokeObjectURL(objUrl); }
+  } finally { clearTimeout(to); }
+}
+/** 2) <img crossorigin> で取得（fetch が失敗した環境向けの予備） */
+function viaImg(url, cors = true) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    if (cors) img.crossOrigin = "anonymous";
+    const to = setTimeout(() => { img.src = ""; reject(new Error("timeout")); }, CONFIG.IMG_TIMEOUT_MS);
+    img.onload = () => { clearTimeout(to); try { resolve(drawToDataUrl(img, img.naturalWidth, img.naturalHeight)); } catch (e) { reject(e); } };
+    img.onerror = () => { clearTimeout(to); reject(new Error("load error")); };
+    img.src = url;
+  });
+}
+async function toDataUrlInBrowser(url) {
+  if (IMG_CACHE.has(url)) return IMG_CACHE.get(url);
+  let data = null;
+  try { data = await viaFetch(url); }
+  catch (e1) {
+    try { data = await viaImg(url); }
+    catch (e2) { console.warn("ブラウザで画像を読み取れませんでした（CORS 未許可の可能性）", url, e1.message, e2.message); }
+  }
+  if (data) IMG_CACHE.set(url, data);
+  return data;
+}
+/** 画像つき投稿に image_data を付与。戻り値：{ total, ok } */
+async function attachImageData(pl) {
+  const posts = [pl.target, ...pl.references].filter(p => p.image && !p.image_data);   // 投稿前チェックの画像は縮小済み
+  const data = await Promise.all(posts.map(p => toDataUrlInBrowser(p.image)));
+  let ok = 0;
+  posts.forEach((p, i) => { if (data[i]) { p.image_data = data[i]; ok++; } });
+  return { total: posts.length, ok };
+}
+
+function buildPayload() {
+  const mode = S.mode === "draft" ? "draft" : "posted";
+  const p = targetPost();
+  const { pool, refs } = buildRefs();
+  const idMap = { T: p.id };
+  const references = refs.filter(r => !S.refOff.has(r.p.id)).map((r, i) => {
+    const id = "R" + (i + 1); idMap[id] = r.p.id;
+    return toPayloadPost(r.p, id, { groups: r.groups });
+  });
+  const goal = { type: S.goal, label: GOALS[S.goal].label, note: S.goal === "other" ? S.goalNote.trim().slice(0, CONFIG.MAX_GOAL) : "" };
+  const context = {
+    event: STATS.event, total_posts: STATS.total, avg_like: STATS.avgLike, avg_pv: STATS.avgPv, avg_like_rate: STATS.avgRate,
+    ref_basis: GOALS[S.goal].basis, ref_top_n: S.refN, ref_pool_size: pool.length,
+    ref_pool_filter: S.refFilter ? [S.f.name.trim() && `ユーザー名:${S.f.name.trim()}`, S.f.genders.size && `性別:${[...S.f.genders].map(gLabel).join("/")}`, S.f.ages.size && `年齢層:${[...S.f.ages].map(aLabel).join("/")}`].filter(Boolean).join(" ") || "なし" : "なし"
+  };
+  const imgOf = q => (S.sendImages && q.thumb ? q.thumb : "");
+  references.forEach((r, i) => { const img = i < CONFIG.IMG_REFS_MAX ? imgOf(byId(idMap[r.id])) : ""; if (img) r.image = img; });
+  let target;
+  if (mode === "draft") {
+    // 投稿前チェック：数値は無く、本文・表示名・アップロード画像（縮小済み data URL）だけを送る
+    target = { id: "T", text: oneLine(p.s).slice(0, CONFIG.MAX_TEXT) };
+    if (CONFIG.SEND_NAME && p.n) target.name = p.n;
+    if (S.sendImages && S.draft.imgAi) target.image_data = S.draft.imgAi;
+  } else {
+    target = toPayloadPost(p, "T", imgOf(p) ? { image: imgOf(p) } : {});
+  }
+  const instructions = S.instr.replace(/\r\n?/g, "\n").trim().slice(0, CONFIG.MAX_INSTR);
+  const tKey = mode === "draft" ? [target.text, target.name || "", target.image_data ? S.draft.sig : ""] : [p.id, !!target.image];
+  return { mode, goal, context, target, references, instructions, idMap, beforeText: p.s,
+    key: JSON.stringify([mode, tKey, goal, context, references.map(r => [idMap[r.id], r.like, r.pv, r.image || ""]), instructions]) };
+}
+
+function status(html, cls) { const st = $("status"); st.className = "status" + (cls ? " " + cls : ""); st.innerHTML = html; st.hidden = !html; }
+function syncButtons() {
+  const label = S.busy ? "分析中…" : S.mode === "draft" ? "投稿前チェックを実行" : "改善案を生成";
+  $("runBtn").disabled = $("runBtn2").disabled = S.busy || !configured(CONFIG.GAS_URL);
+  $("runLabel").textContent = $("runLabel2").textContent = label;
+  $("forceBtn").disabled = S.busy; $("loginBtn").disabled = S.busy;
+  const li = loggedIn();
+  $("userBox").hidden = !li; $("userName").textContent = getName() || "–";
+  $("userBox2").hidden = !li; $("userName2").textContent = getName() || "–";
+  if (!configured(CONFIG.GAS_URL)) status("GAS の URL が未設定です（CONFIG.GAS_URL）", "error");
+}
+function syncRunNote() {
+  if (!targetPost() || !STATS) return;
+  const n = buildRefs().refs.filter(r => !S.refOff.has(r.p.id)).length;
+  const goal = S.goal === "other" ? (S.goalNote.trim() ? `「${S.goalNote.trim().slice(0, 24)}${S.goalNote.trim().length > 24 ? "…" : ""}」` : "その他（未記入）") : GOALS[S.goal].label;
+  $("runNote").innerHTML = `目的 <b style="color:var(--rich)">${esc(goal)}</b> ・ 参考投稿 <b style="color:var(--rich)">${n}</b> 件${S.sendImages ? "（画像つき）" : ""}で、${S.mode === "draft" ? "入力したコメントと画像を投稿前にチェック" : "選択した投稿の改善案を作成"}します。`;
+}
+function showLogin(msg) {
+  $("login").hidden = false; $("loginErr").textContent = msg || "";
+  if (!$("lName").value) $("lName").value = getName();
+  $("lPw").value = (getCreds() || {}).pw || "";
+  ($("lName").value ? $("lPw") : $("lName")).focus();
+}
+
+async function run(force) {
+  if (S.busy || S.step !== 2) return;
+  savePrefs();
+  if (S.goal === "other" && !S.goalNote.trim()) { status("「その他の目的」の内容を入力してください", "error"); $("goalNote").focus(); return; }
+  if (!loggedIn()) {
+    S.busy = true; syncButtons();
+    const ok = await autoLogin();
+    S.busy = false; syncButtons();
+    if (!ok) { S.pendingForce = !!force; showLogin(S.authMsg || ""); S.authMsg = ""; status("Name とパスワードを入力してください"); return; }
+  }
+  if (!canAnalyze()) { status(S.mode === "draft" ? "Step 1 でコメントを入力してください" : "Step 1 で投稿を選んでください", "error"); return; }
+  const pl = buildPayload();
+  if (!pl.references.length) { status("参考投稿が 0 件です。件数や絞り込み条件を見直してください", "error"); return; }
+  S.busy = true; syncButtons();
+  $("result").classList.add("loading");
+  const t0 = Date.now();
+  let imgStat = { total: 0, ok: 0 };
+  if (pl.target.image || pl.references.some(r => r.image)) {
+    status('<span class="spin"></span><span>画像を準備しています…</span>');
+    imgStat = await attachImageData(pl);
+  }
+  const withImg = imgStat.total || !!pl.target.image_data;
+  status(`<span class="spin"></span><span>AI が${withImg ? "画像と本文を" : ""}解析して${pl.mode === "draft" ? "投稿前チェック" : "改善案"}を作成しています… <b id="sec">0</b> 秒</span>`);
+  S.timer = setInterval(() => { const s = $("sec"); if (s) s.textContent = Math.floor((Date.now() - t0) / 1000); }, 250);
+  const seq = S.runSeq = (S.runSeq || 0) + 1;
+  const res = await post({ action: "coach", token: getToken(CONFIG.KEYS.TOKEN), mode: pl.mode, goal: pl.goal, context: pl.context, target: pl.target, references: pl.references, instructions: pl.instructions, force: !!force }, CONFIG.GAS_URL);
+  clearInterval(S.timer); S.busy = false;
+  syncButtons(); $("result").classList.remove("loading");
+  const sec = ((Date.now() - t0) / 1000).toFixed(1);
+  if (!res.ok) {
+    if (res.code === "AUTH") {
+      // 認証切れは再ログイン後に再実行されるため、ログは記録しない
+      clearTokens();
+      if (!S.retried && getCreds()) { S.retried = true; return run(force); }
+      S.pendingForce = !!force; showLogin(res.message); status(""); return;
+    }
+    status(esc(res.message || "生成に失敗しました"), "error"); $("forceBtn").hidden = false;
+    sendLog(pl, res, sec, seq);   // 失敗も記録（結果列は空）
+    return;
+  }
+  S.retried = false;
+  S.lastKey = pl.key; S.idMap = pl.idMap;
+  renderResult(res.result, pl);
+  const at = res.generated_at ? new Date(res.generated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  $("resultMeta").textContent = `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""}${res.images_used ? ` ・ 画像 ${res.images_used} 枚` : ""}`;
+  const imgWarn = res.images_note ? `<span class="warn">※ ${esc(res.images_note)}</span>`
+    : imgStat.total && imgStat.ok < imgStat.total && !res.images_used ? `<span class="warn">※ 画像を読み取れなかったため本文のみで解析しました</span>` : "";
+  status(imgWarn); $("forceBtn").hidden = false; $("runBtn").classList.remove("stale");
+  // AI の結果が返った後にログを送る（推論結果を記録するため）。表示は待たせない
+  sendLog(pl, res, sec, seq);
+  $("resultPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* =====================================================================
+   実行ログ（GAS_COACH_LOG）：改善案生成 GAS の応答を受け取った後に送る
+   - 参考投稿 ID（artwork_id）は R1, R2 … の順で配列にして送る（シートにはカンマ区切りで記録）
+   - 推論結果（result）は GAS 側で列に展開して記録する
+   - 結果表示は待たせない。ログ用トークン切れなら保存済みの資格情報で 1 回だけ再ログインして再送する
+===================================================================== */
+async function sendLog(pl, res, sec, seq) {
+  if (!logEnabled()) return;
+  logStatus("");
+  const body = {
+    action: "log",
+    mode: pl.mode,
+    goal: pl.goal.label, goal_note: pl.goal.note,
+    target_id: pl.mode === "draft" ? "" : pl.idMap.T,
+    target_text: pl.mode === "draft" ? pl.target.text : "",
+    ref_ids: pl.references.map(r => pl.idMap[r.id]),
+    instructions: pl.instructions,
+    status: res.ok ? "OK" : (res.code || "ERROR"),
+    error: res.ok ? "" : (res.message || ""),
+    model: res.model || "", prompt_version: res.prompt_version || "",
+    cached: !!res.cached, elapsed_sec: Number(sec),
+    images_used: res.images_used || 0, images_note: res.images_note || "",
+    result: res.ok ? res.result : null
+  };
+  const send = () => post({ ...body, token: getToken(CONFIG.KEYS.LOG_TOKEN) }, CONFIG.LOG_URL);
+  let r = await send();
+  if (!r.ok && r.code === "AUTH") {
+    localStorage.removeItem(CONFIG.KEYS.LOG_TOKEN);
+    const c = getCreds();
+    if (c) {
+      const lr = await post({ action: "login", name: c.name, password: c.pw }, CONFIG.LOG_URL);
+      if (lr.ok) { setToken(lr.token, lr.expires_in, CONFIG.KEYS.LOG_TOKEN); r = await send(); }
+      else r = lr;
+    }
+  }
+  if (seq !== S.runSeq) return;   // 次の実行が始まっていたら表示しない
+  if (r.ok) {
+    console.info("実行ログを記録しました", r);
+    if (res.ok) $("resultMeta").textContent += " ・ ログ記録済み";
+    return;
+  }
+  // 以前は画面上部の #status に追記していたが、直後に結果パネルへスクロールするため気づけなかった。
+  // 結果パネル内の専用欄に、エラーコード付きで残す。
+  console.warn("実行ログを記録できませんでした", r);
+  logStatus(`※ 実行ログを記録できませんでした［${esc(r.code || "?")}］${esc(r.message || "不明なエラー")}`);
+}
+function logStatus(html) { const el = $("logStatus"); el.className = "status" + (html ? " error" : ""); el.innerHTML = html; el.hidden = !html; }
+function renderResult(r, pl) {
+  const isDraft = pl.mode === "draft";
+  const evi = ids => {
+    const b = (ids || []).filter(id => S.idMap[id]).map(id => {
+      const p = postOf(S.idMap[id]); if (!p) return "";
+      const label = id === "T" ? (isDraft ? "あなたの下書き" : "あなたの投稿") : (p.n || oneLine(p.s).slice(0, 16));
+      return `<button type="button" data-eid="${esc(id)}" title="${esc(p.s)}"><b>${esc(id)}</b>${esc(label)}</button>`;
+    }).join("");
+    return b ? `<div class="evi">${b}</div>` : "";
+  };
+  const list = (arr, empty = "該当なし") => (arr || []).length ? `<ul class="li">${arr.map((t, i) => `<li><i>${i + 1}</i><span>${esc(t)}</span></li>`).join("")}</ul>` : `<div class="note" style="margin:0">${empty}</div>`;
+  const LV = { "低": 1, "中": 2, "高": 3 };
+  const meter = (label, v) => { const n = LV[v] || 0; return n ? `<span class="meter">${label}<s>${[1, 2, 3].map(i => `<u class="${i <= n ? "on" : ""}"></u>`).join("")}</s>${esc(v)}</span>` : ""; };
+  const d = r.diagnosis || {}, ins = r.reference_insights || {}, rw = r.rewrite || {}, ph = r.photo || {}, vp = r.viewpoint || {};
+  const applied = [pl.goal.type === "other" && "目的（自由記述）", pl.instructions && "追加指示", (pl.target.image || pl.target.image_data || pl.references.some(r => r.image)) && "画像"].filter(Boolean);
+  const LVC = { "高": "hi", "中": "mid", "低": "lo", "一致": "hi", "一部一致": "mid", "不一致": "lo" };
+  const badge = (label, v) => (v ? `<span class="lvl ${LVC[v] || ""}">${label}${esc(v)}</span>` : "");
+  const qlist = arr => `<ul class="li qlist">${arr.map((t, i) => `<li><i>Q${i + 1}</i><span>${esc(t)}</span></li>`).join("")}</ul>`;
+  const blanks = /【[^】]*】/g;   // 書き換え例の「投稿者が自分で埋める空欄」
+  const rwHtml = esc(rw.text || "").replace(blanks, m => `<mark class="blank">${m}</mark>`);
+  $("result").innerHTML = `
+    <div class="r-meta">目的：${esc(pl.goal.label)}${pl.goal.note ? `（${esc(pl.goal.note)}）` : ""} ・ 参考投稿 ${pl.references.length} 件</div>
+    ${r.headline ? `<div class="headline">${esc(r.headline)}</div>` : ""}
+
+    ${vp.level || vp.summary ? `
+    <div class="sec"><span class="prio">最優先</span>本文の視点・気づき ・ Viewpoint</div>
+    <div class="rcard view" style="margin-bottom:22px">
+      <h4><i>◆</i>あなた自身の視点・気づき${badge("視点 ", vp.level)}</h4>
+      ${vp.summary ? `<p class="rsum">${esc(vp.summary)}</p>` : ""}
+      ${(vp.found || []).length ? `<div class="subh">本文から読み取れた視点</div>${list(vp.found)}` : ""}
+      ${(vp.questions || []).length ? `<div class="subh">自分の言葉で書き足すための問いかけ</div>${qlist(vp.questions)}` : ""}
+    </div>` : ""}
+
+    ${ph.match || ph.summary || (ph.tips || []).length ? `
+    <div class="sec"><span class="prio" style="background:#2b7a8c">次点</span>画像と本文の一致 ・ Photo</div>
+    <div class="rcard photo" style="margin-bottom:22px">
+      <h4><i>◎</i>画像は本文の視点と合っているか${badge("", ph.match)}</h4>
+      ${ph.summary ? `<p class="rsum">${esc(ph.summary)}</p>` : ""}
+      ${(ph.tips || []).length ? `<div class="subh">撮り直し・選び直しの提案</div>${list(ph.tips)}` : ""}
+      ${ph.evidence_ids && ph.evidence_ids.length ? `<div style="margin-top:10px">${evi(ph.evidence_ids)}</div>` : ""}
+    </div>` : ""}
+
+    <div class="sec">現状の診断 ・ Diagnosis</div>
+    ${d.summary ? `<p class="rsum">${esc(d.summary)}</p>` : ""}
+    <div class="rgrid">
+      <div class="rcard good"><h4><i>＋</i>活かしたい点</h4>${list(d.strengths)}</div>
+      <div class="rcard gap"><h4><i>△</i>伸びしろ</h4>${list(d.weaknesses)}</div>
+    </div>
+
+    <div class="sec">参考投稿から学べること ・ Insights</div>
+    <div class="rcard" style="margin-bottom:22px">
+      ${ins.summary ? `<p class="rsum">${esc(ins.summary)}</p>` : ""}
+      ${list(ins.traits)}
+      ${ins.evidence_ids && ins.evidence_ids.length ? `<div style="margin-top:10px">${evi(ins.evidence_ids)}</div>` : ""}
+    </div>
+
+    <div class="sec">改善アクション ・ What to do</div>
+    <div class="acts">${(r.improvements || []).length ? r.improvements.map((a, i) => `
+      <div class="act">
+        <div class="act-no">${i + 1}</div>
+        <div>
+          <div class="act-t">${esc(a.title)}</div>
+          ${a.detail ? `<div class="act-d">${esc(a.detail)}</div>` : ""}
+          ${a.example ? `<div class="act-ex"><small>EXAMPLE</small>${esc(a.example)}</div>` : ""}
+          <div class="act-meta">${meter("期待効果", a.impact)}${meter("実施負荷", a.effort)}${evi(a.evidence_ids)}</div>
+        </div>
+      </div>`).join("") : '<div class="note">該当なし</div>'}
+    </div>
+
+    ${rw.text ? `
+    <div class="sec">改善後の本文例 ・ Rewrite</div>
+    <div class="rewrite">
+      <div class="rw-cols">
+        <div class="rw-col"><small>BEFORE</small><p>${esc(pl.beforeText || "")}</p></div>
+        <div class="rw-col"><small>AFTER <button type="button" class="copy" id="copyBtn">コピー</button></small><p id="rwText">${rwHtml}</p></div>
+      </div>
+      ${blanks.test(rw.text || "") ? `<div class="rw-hint">※ 黄色の【 】は、あなた自身の言葉で書き換えてください（AI は体験や感想を創作しません）。</div>` : ""}
+      ${(rw.points || []).length ? `<div class="rw-points">${rw.points.map(t => `<div>${esc(t)}</div>`).join("")}</div>` : ""}
+    </div>` : ""}
+
+    ${(r.caveats || []).length ? `<div class="caveats">${r.caveats.map(c => `<div><b>注意</b>${esc(c)}</div>`).join("")}</div>` : ""}
+    ${applied.length ? `<div class="applied">反映した入力：${applied.join("・")}</div>` : ""}`;
+  $("result").querySelectorAll("[data-eid]").forEach(b => b.addEventListener("click", () => { const p = postOf(S.idMap[b.dataset.eid]); if (p) openModal(p); }));
+  const cp = $("copyBtn");
+  if (cp) cp.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(rw.text); cp.textContent = "コピーしました"; }
+    catch (e) { cp.textContent = "コピー失敗"; }
+    setTimeout(() => (cp.textContent = "コピー"), 1600);
+  });
+}
+
+/* 条件が表示中の結果と違えば知らせる（自動実行はしない） */
+function checkStale() {
+  syncRunNote();
+  if (!S.lastKey || S.busy || S.step !== 2) return;
+  const stale = buildPayload().key !== S.lastKey;
+  $("runBtn").classList.toggle("stale", stale);
+  if (stale) status("条件が変わりました。表示中の提案は以前の条件のものです。「改善案を生成」で更新してください。", "stale");
+  else if ($("status").classList.contains("stale")) status("");
+}
+function resetResultIfChanged() {
+  if (S.idMap.T && S.idMap.T !== targetId()) {
+    S.lastKey = null; S.idMap = {};
+    $("result").innerHTML = '<div class="placeholder"><b>まだ分析していません</b>目的と参考投稿を確認して、実行ボタンを押してください。</div>';
+    $("resultMeta").textContent = "未実行"; status(""); $("forceBtn").hidden = true; $("runBtn").classList.remove("stale");
+  } else checkStale();
+}
+
+$("runBtn").addEventListener("click", () => { S.retried = false; run(false); });
+/* スマホ：実行パネルが画面外のときだけ下部に実行ボタンを出す（押すと実行パネルへ移動して実行。進行状況が見えるように） */
+S.vis = { run: false, result: false };
+function syncRunDock() {
+  $("runDock").classList.toggle("show", S.step === 2 && !S.vis.run && !S.vis.result && !$("modal").classList.contains("show"));
+}
+if ("IntersectionObserver" in window) {
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => { S.vis[e.target.id === "runPanel" ? "run" : "result"] = e.isIntersecting; });
+    syncRunDock();
+  });
+  io.observe($("runPanel")); io.observe($("resultPanel"));
+}
+$("runBtn2").addEventListener("click", () => {
+  $("runPanel").scrollIntoView({ behavior: "smooth", block: "center" });
+  S.retried = false; run(false);
+});
+$("forceBtn").addEventListener("click", () => { S.retried = false; run(true); });
+$("logoutBtn").addEventListener("click", () => { clearTokens(); clearPw(); $("lPw").value = ""; status("ログアウトしました（保存したパスワードも削除しました）"); });
+$("login").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("lName").value.replace(/\s+/g, " ").trim().slice(0, 40), pw = $("lPw").value;
+  if (!name) { $("loginErr").textContent = "Name を入力してください"; $("lName").focus(); return; }
+  if (!pw) return;
+  $("lName").value = name;
+  S.busy = true; syncButtons(); $("loginErr").textContent = "認証中…";
+  const r = await doLogin(name, pw);
+  S.busy = false; syncButtons();
+  if (!r.ok) { $("loginErr").textContent = r.message; $("lPw").focus(); return; }
+  saveCreds(name, pw);
+  $("login").hidden = true; $("loginErr").textContent = ""; syncButtons();
+  run(S.pendingForce);
+});
+$("logoutBtn2").addEventListener("click", () => $("logoutBtn").click());
+
+/* ---------- モーダル ---------- */
+function openModal(p) {
+  $("modalMedia").innerHTML = p.img ? `<img src="${esc(p.img)}" alt="投稿画像" onerror="this.outerHTML='<span class=&quot;noimg&quot;>画像を読み込めません</span>'">` : '<span class="noimg">画像はありません</span>';
+  $("modalName").textContent = p.n || (p.draft ? "投稿前チェック" : "投稿者名なし");
+  $("modalBadges").innerHTML = p.draft ? '<span class="badge g">投稿前の下書き</span>' : `<span class="badge g">${esc(gLabel(p.g))}</span><span class="badge a">${esc(aLabel(p.a))}</span>`;
+  $("modalMetrics").innerHTML = p.draft ? "" : `<span class="lk">${ICON.like}${fmt(p.like)}</span><span class="pv">${ICON.pv}${fmt(p.pv)}</span>`;
+  $("modalDate").textContent = p.t || "";
+  $("modalText").textContent = p.s;
+  $("modal").classList.add("show"); $("modal").setAttribute("aria-hidden", "false"); document.body.classList.add("lock"); $("modalX").focus();
+  syncRunDock();
+}
+function closeModal() { $("modal").classList.remove("show"); $("modal").setAttribute("aria-hidden", "true"); document.body.classList.remove("lock"); syncRunDock(); }
+$("modalX").addEventListener("click", closeModal);
+$("modal").addEventListener("click", e => { if (e.target === $("modal")) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("modal").classList.contains("show")) closeModal(); });
+
+/* ---------- 起動 ---------- */
+loadPrefs();
+loadDraft();
+renderDraft();
+setMode(S.mode);
+$("lName").value = getName();
+$("lPw").value = (getCreds() || {}).pw || "";
+initPrompt();
+syncButtons();
+(async () => {
+  try {
+    const json = await loadData();
+    POSTS = normalize(json.records || []);
+    STATS = buildStats();
+    $("metaUpdated").textContent = POSTS.map(p => p.t).filter(Boolean).sort().pop() || "–";
+    buildFilters(); renderGrid(); syncTabs(); syncDock();
+  } catch (err) {
+    $("postGrid").innerHTML = '<div class="empty"><b>データを読み込めませんでした</b>json/mart_action_drop_engagement.json または mart_action_drop_engagement.json の配置を確認してください（file:// では fetch できません）</div>';
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>
