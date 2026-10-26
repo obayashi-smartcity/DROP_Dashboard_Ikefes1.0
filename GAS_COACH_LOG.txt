@@ -19,7 +19,13 @@
  *     "model":"...", "prompt_version":"...", "cached":false, "elapsed_sec":12.3,
  *     "images_used":3, "images_note":"...",
  *     "result":{ headline, diagnosis, reference_insights, photo, improvements, rewrite, caveats } | null
- *   } → { ok:true }
+ *   } → { ok:true, sheet:"記録したシート名", row:行番号 }
+ *
+ * ■ v3 の変更（ログが記録されない不具合の修正）
+ *   - 見出しが一致しない旧シートに当たった場合はエラーで止めず、列構成専用の別シート（<シート名>_xxxxxx）に記録
+ *   - 新規シート（既定 26 列）に 31 列を書く前に列を追加。appendRow をやめ setValues で明示的に書く
+ *   - 業務エラーも console に出力（Apps Script の「実行数」で原因を確認できる）
+ *   - LOG_URL?diag=1 をブラウザで開くと記録先の状態を確認できる
  *
  * ■ 記録する列（シートが空なら見出し行を自動作成）
  *   タイムスタンプ / Name / 目的 / 目的（自由記述） / 対象投稿ID / 参考投稿数 / 参考投稿ID（カンマ区切り） / 追加指示 /
@@ -82,14 +88,26 @@ function doPost(e) {
       default:      throw new AppError('BAD_REQUEST', '不明な action です');
     }
   } catch (err) {
-    if (err instanceof AppError) return json_({ ok: false, code: err.code, message: err.message });
+    if (err instanceof AppError) {
+      // 「実行数」画面で原因を追えるよう、業務エラーも記録する（AUTH は頻出なので warn）
+      (err.code === 'AUTH' ? console.warn : console.error)('[' + err.code + '] ' + err.message);
+      return json_({ ok: false, code: err.code, message: err.message });
+    }
     console.error((err && err.stack) || err);
     return json_({ ok: false, code: 'SERVER', message: 'ログ記録でサーバーエラーが発生しました' });
   }
 }
 
-function doGet() {
-  return json_({ ok: true, service: 'drop-coach-log', version: 2, time: new Date().toISOString() });
+/** ブラウザで LOG_URL を開くと疎通確認。?diag=1 で記録先の状態も返す（version が 3 でなければ新バージョン未デプロイ） */
+function doGet(e) {
+  const out = { ok: true, service: 'drop-coach-log', version: 3, time: new Date().toISOString() };
+  if (e && e.parameter && e.parameter.diag) {
+    out.password_set = !!prop_('APP_PASSWORD');
+    out.sheet_id_set = !!prop_('LOG_SHEET_ID');
+    try { out.sheet = getSheet_().getName(); out.sheet_ok = true; }
+    catch (err) { out.sheet_ok = false; out.sheet_error = String(err && err.message || err); }
+  }
+  return json_(out);
 }
 
 /* ============================ ログイン ============================ */
@@ -148,7 +166,7 @@ function handleLog_(req) {
   let resultJson = r ? JSON.stringify(r) : '';
   if (resultJson.length > MAX_LEN.JSON_CELL) resultJson = '（サイズ超過のため省略）';
 
-  appendRow_([
+  const written = appendRow_([
     new Date(),
     session.name,
     clean_(req.goal, MAX_LEN.GOAL),
@@ -185,7 +203,7 @@ function handleLog_(req) {
   session.n = (session.n || 0) + 1;
   const rest = Math.floor((session.exp - Date.now()) / 1000);
   if (rest > 1) cache.put(key, JSON.stringify(session), Math.min(rest, CACHE_MAX_SEC));
-  return json_({ ok: true });
+  return json_({ ok: true, sheet: written.sheet, row: written.row });
 }
 
 /** 参考投稿 ID（artwork_id）の配列を検証。順序（R1, R2 …）は保持し、重複・不正値は除外 */
@@ -221,6 +239,13 @@ function sanitizeResult_(raw) {
   };
 }
 
+/**
+ * 1 行追記する（v3：失敗しにくい書き込みに変更）
+ *  - 見出しが一致しないシート（旧版 coach_log など）に当たっても止めず、列構成専用の別シートへ自動で書く
+ *  - 新規シートの既定 26 列では 31 列が入らないため、書き込み前に列数を確保する
+ *  - appendRow ではなく「最終行の次」を明示して setValues で書く
+ *  戻り値：{ sheet: シート名, row: 書き込んだ行番号 }
+ */
 function appendRow_(row) {
   // 先頭が = + - @ の文字列は数式として解釈されないよう ' を付ける
   const safe = v => (typeof v === 'string' && /^[=+\-@]/.test(v) ? "'" + v : v);
@@ -228,37 +253,64 @@ function appendRow_(row) {
   try { lock.waitLock(10000); } catch (e) { throw new AppError('BUSY', 'ログ記録が混み合っています'); }
   try {
     const sh = getSheet_();
-    if (sh.getLastRow() === 0) {
-      sh.appendRow(LOG_HEADER);
-      sh.setFrozenRows(1);
-      sh.getRange(1, 1, 1, LOG_HEADER.length).setFontWeight('bold');
-      sh.getRange('A:A').setNumberFormat('yyyy/mm/dd hh:mm:ss');
-      sh.getRange(1, 1, sh.getMaxRows(), LOG_HEADER.length).setVerticalAlignment('top');
-    } else {
-      // 列構成が違うシート（旧版など）には書かない：列ずれでデータが壊れるのを防ぐ
-      const head = sh.getRange(1, 1, 1, LOG_HEADER.length).getDisplayValues()[0];
-      if (head.join('\t') !== LOG_HEADER.join('\t')) {
-        throw new AppError('CONFIG', 'シート「' + sh.getName() + '」の見出しが現在の列構成と一致しません。LOG_SHEET_NAME を新しいシート名に変更してください');
-      }
-    }
-    sh.appendRow(row.map(safe));
+    const r = sh.getLastRow() + 1;
+    ensureSize_(sh, r, LOG_HEADER.length);
+    sh.getRange(r, 1, 1, LOG_HEADER.length).setValues([row.slice(0, LOG_HEADER.length).map(safe)]);
+    SpreadsheetApp.flush();
+    return { sheet: sh.getName(), row: r };
   } finally {
     lock.releaseLock();
   }
 }
 
-function getSheet_() {
-  const id = prop_('LOG_SHEET_ID');
+function openSpreadsheet_() {
+  const id = String(prop_('LOG_SHEET_ID') || '').trim();
   let ss;
   try {
     ss = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
   } catch (e) {
     console.error('open spreadsheet failed', e);
-    throw new AppError('CONFIG', 'スプレッドシートを開けません（LOG_SHEET_ID を確認してください）');
+    throw new AppError('CONFIG', 'スプレッドシートを開けません（LOG_SHEET_ID とデプロイしたアカウントの編集権限を確認してください）');
   }
   if (!ss) throw new AppError('CONFIG', 'LOG_SHEET_ID が未設定です（スプレッドシートに紐づかないプロジェクトでは必須）');
-  const name = prop_('LOG_SHEET_NAME');
-  return ss.getSheetByName(name) || ss.insertSheet(name);
+  return ss;
+}
+
+/** 見出しが LOG_HEADER と一致するシートを返す（無ければ作る）。不一致なら列構成ごとの別シートに切り替える */
+function getSheet_() {
+  const ss = openSpreadsheet_();
+  const base = prop_('LOG_SHEET_NAME');
+  const sh = ss.getSheetByName(base) || ss.insertSheet(base);
+  if (prepareSheet_(sh)) return sh;
+  // 旧版の見出しが残っているシート：壊さずに別シートへ（列構成のハッシュで名前を固定）
+  const alt = base + '_' + sha256_(LOG_HEADER.join('\t')).slice(0, 6);
+  console.warn('シート「' + base + '」の見出しが列構成と一致しないため「' + alt + '」に記録します');
+  const sh2 = ss.getSheetByName(alt) || ss.insertSheet(alt);
+  if (prepareSheet_(sh2)) return sh2;
+  throw new AppError('CONFIG', 'シート「' + alt + '」の見出しが列構成と一致しません。LOG_SHEET_NAME を新しいシート名に変更してください');
+}
+
+/** 空なら見出しを作る。見出しが一致すれば true */
+function prepareSheet_(sh) {
+  if (sh.getLastRow() === 0) {
+    ensureSize_(sh, 1, LOG_HEADER.length);
+    sh.getRange(1, 1, 1, LOG_HEADER.length).setValues([LOG_HEADER]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    sh.getRange('A:A').setNumberFormat('yyyy/mm/dd hh:mm:ss');
+    sh.getRange(1, 1, sh.getMaxRows(), LOG_HEADER.length).setVerticalAlignment('top');
+    return true;
+  }
+  if (sh.getMaxColumns() < LOG_HEADER.length) return false;
+  const head = sh.getRange(1, 1, 1, LOG_HEADER.length).getDisplayValues()[0].map(v => String(v).trim());
+  return head.join('\t') === LOG_HEADER.join('\t');
+}
+
+/** 行・列が足りなければ追加する（insertSheet の既定は 1000 行 × 26 列） */
+function ensureSize_(sh, rows, cols) {
+  const mc = sh.getMaxColumns();
+  if (mc < cols) sh.insertColumnsAfter(mc, cols - mc);
+  const mr = sh.getMaxRows();
+  if (mr < rows) sh.insertRowsAfter(mr, Math.max(rows - mr, 100));
 }
 
 /* ============================== 共通 ============================== */
