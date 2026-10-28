@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DROP. Graph — 環境資産 × 体験 × 感情</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+  :root{
+    --bg:#f6f5f9; --bg-b:#ecebf1; --card:#fff;
+    --stroke:#dcd9e3; --stroke-soft:#ebe9f0;
+    --text:#1d1b22; --muted:#5d5a66; --dim:#96939e;
+    --rich:#7a58b0; --rich-2:#a98cd0; --rich-soft:#efe9f7;
+    --pv:#4a6fa5; --pv-soft:#e6edf7;
+    --ok:#2f8a5b; --warn:#9a6b00; --err:#c0392b;
+    /* ノード色 */
+    --asset:#7a58b0; --asset-soft:#efe9f7;
+    --exp:#2f7fa3;   --exp-soft:#e2f0f6;
+    --emo:#d0743c;   --emo-soft:#fbeee4;
+    --font:"Inter","Noto Sans JP",system-ui,sans-serif;
+    --font-display:"Inter","Noto Sans JP",sans-serif;
+    --gap:18px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+  button{font-family:var(--font)}
+  [hidden]{display:none!important}
+  /* ---------- App bar ---------- */
+  .appbar{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--stroke-soft)}
+  .appbar-in{max-width:1320px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:28px}
+  .brand{font-family:var(--font-display);font-weight:900;font-size:20px;letter-spacing:-.5px;line-height:1;white-space:nowrap}
+  .brand i{font-style:normal;color:var(--rich)}
+  .brand small{display:block;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--dim);margin-top:4px}
+  .stepper{display:flex;align-items:center;flex:1;min-width:0}
+  .step-tab{display:flex;align-items:center;gap:10px;background:none;border:none;padding:6px 4px;cursor:pointer;color:var(--dim);font-size:13px;font-weight:700;white-space:nowrap}
+  .step-tab b{font-family:var(--font-display);font-size:11px;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border:1.5px solid var(--stroke);color:var(--dim);transition:.15s}
+  .step-tab.active{color:var(--text)}
+  .step-tab.active b{background:var(--rich);border-color:var(--rich);color:#fff}
+  .step-tab.done b{border-color:var(--rich);color:var(--rich)}
+  .step-tab:disabled{cursor:not-allowed;opacity:.55}
+  .step-line{flex:0 1 70px;height:1.5px;background:var(--stroke);margin:0 14px}
+  .appbar-meta{display:flex;align-items:center;gap:14px;font-size:11.5px;color:var(--dim);white-space:nowrap}
+  .appbar-meta b{color:var(--rich)}
+  .link-btn{border:none;background:none;color:var(--dim);font-size:11.5px;cursor:pointer;text-decoration:underline;padding:0}
+  .link-btn:hover{color:var(--text)}
+  .link-btn:disabled{opacity:.4;cursor:not-allowed}
+  main{max-width:1320px;margin:0 auto;padding:26px 24px 120px}
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+  .page-head h1{margin:0;font-family:var(--font-display);font-weight:900;font-size:24px;letter-spacing:-.4px}
+  .page-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .eyebrow{font-size:10.5px;letter-spacing:2px;color:var(--rich);font-weight:800;text-transform:uppercase}
+  /* ---------- Filter bar ---------- */
+  .filters{background:var(--card);border:1px solid var(--stroke-soft);padding:14px 16px;margin-bottom:12px}
+  .f-group{display:flex;flex-direction:column;gap:7px;min-width:0}
+  .f-title{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);font-weight:800}
+  .search{position:relative}
+  .search svg{position:absolute;left:10px;top:50%;width:15px;height:15px;transform:translateY(-50%);color:var(--dim)}
+  .search input{width:260px;border:1px solid var(--stroke);background:var(--bg);font:13px var(--font);padding:8px 10px 8px 32px;outline:none}
+  .search input:focus{border-color:var(--rich);background:#fff;box-shadow:0 0 0 3px var(--rich-soft)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{border:1px solid var(--stroke);background:#fff;color:var(--muted);font-size:11.5px;padding:6px 10px;cursor:pointer;transition:.15s;white-space:nowrap;line-height:1.2}
+  .chip:hover{color:var(--text);border-color:var(--rich-2)}
+  .chip.on{background:var(--rich-soft);color:var(--rich);border-color:var(--rich);font-weight:700}
+  .chip span{opacity:.55;margin-left:3px;font-variant-numeric:tabular-nums}
+  select.sel{border:1px solid var(--stroke);background:#fff;font:12.5px var(--font);padding:7px 10px;color:var(--text)}
+  .f-foot{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);white-space:nowrap}
+  .f-foot b{color:var(--rich);font-size:15px;font-variant-numeric:tabular-nums}
+  .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none}
+  .fold>summary::-webkit-details-marker{display:none}
+  .fold>summary .chev{width:8px;height:8px;border-right:2px solid var(--rich);border-bottom:2px solid var(--rich);transform:rotate(-45deg);transition:transform .15s;flex:none;margin-right:2px}
+  .fold[open]>summary .chev{transform:rotate(45deg)}
+  .fold-state{margin-left:auto;font-size:11px;font-weight:700;color:var(--dim);white-space:nowrap}
+  .fold-state.on{color:var(--rich);background:var(--rich-soft);padding:2px 8px}
+  .f-top{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap}
+  .f-more{border-top:1px solid var(--stroke-soft);margin-top:12px;padding-top:10px}
+  .f-more>summary{font-size:12px;font-weight:800;color:var(--muted);padding:2px 0}
+  .f-more-body{display:flex;flex-wrap:wrap;gap:14px 26px;align-items:flex-end;padding-top:12px}
+  /* 一括選択バー */
+  .bulk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:var(--muted)}
+  .bulk .sp{flex:1}
+  .bulk b{color:var(--rich);font-variant-numeric:tabular-nums}
+  .btn-s{border:1px solid var(--stroke);background:#fff;color:var(--muted);font:700 11.5px var(--font);padding:6px 12px;cursor:pointer;transition:.15s}
+  .btn-s:hover{border-color:var(--rich);color:var(--rich)}
+  .btn-s:disabled{opacity:.45;cursor:not-allowed}
+  /* ---------- Post grid ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+  .pcard{position:relative;text-align:left;background:var(--card);border:1px solid var(--stroke-soft);padding:0;cursor:pointer;display:flex;flex-direction:column;transition:transform .15s, box-shadow .15s, border-color .15s;color:inherit}
+  .pcard:hover{transform:translateY(-2px);box-shadow:0 10px 24px -14px rgba(60,40,100,.35);border-color:var(--rich-2)}
+  .pcard.sel{border-color:var(--rich);box-shadow:0 0 0 2px var(--rich)}
+  .pcard.dis{cursor:not-allowed;opacity:.55}
+  .pcard.dis:hover{transform:none;box-shadow:none;border-color:var(--stroke-soft)}
+  .pcard .media{aspect-ratio:4/3;background:var(--bg-b);overflow:hidden;position:relative}
+  .pcard .media img{width:100%;height:100%;object-fit:cover;display:block}
+  .pcard .check{position:absolute;top:10px;right:10px;width:26px;height:26px;background:rgba(255,255,255,.9);border:1.5px solid var(--stroke);display:flex;align-items:center;justify-content:center;color:transparent;transition:.15s;font:900 12px var(--font-display)}
+  .pcard.sel .check{background:var(--rich);border-color:var(--rich);color:#fff}
+  .pcard .zoom{position:absolute;left:8px;bottom:8px;border:none;background:rgba(29,27,34,.72);color:#fff;font:700 10.5px var(--font);padding:4px 8px;cursor:zoom-in;opacity:0;transition:.15s}
+  .pcard:hover .zoom{opacity:1}
+  .pcard .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:7px;flex:1}
+  .pcard .name{font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pcard .text{font-size:12px;line-height:1.6;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:3.2em}
+  .pcard .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:4px}
+  .metrics{display:flex;gap:12px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+  .metrics span{display:inline-flex;align-items:center;gap:4px}
+  .metrics svg{width:14px;height:14px}
+  .metrics .lk{color:var(--rich)} .metrics .pv{color:var(--pv)}
+  .pdate{font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .badges{display:flex;gap:5px;flex-wrap:wrap}
+  .badge{font-size:10px;padding:2px 7px;font-weight:700;line-height:1.4;border:1px solid transparent}
+  .badge.g{background:var(--rich-soft);color:var(--rich)}
+  .badge.a{background:var(--bg);color:var(--muted);border-color:var(--stroke)}
+  .badge.test{background:#fff4dc;color:var(--warn)}
+  .empty{padding:48px 20px;text-align:center;color:var(--dim);font-size:13px;background:var(--card);border:1px dashed var(--stroke);grid-column:1/-1}
+  .empty b{display:block;color:var(--muted);font-size:14px;margin-bottom:4px}
+  /* ---------- Selection dock ---------- */
+  .dock{position:fixed;left:0;right:0;bottom:0;z-index:40;transform:translateY(110%);visibility:hidden;transition:transform .25s ease,visibility .25s}
+  .dock.show{transform:none;visibility:visible}
+  .dock-in{max-width:1320px;margin:0 auto 16px;padding:10px 12px 10px 14px;background:var(--text);color:#fff;display:flex;align-items:center;gap:16px;box-shadow:0 14px 34px -12px rgba(0,0,0,.45)}
+  .thumbs{display:flex;flex:none}
+  .thumbs img,.thumbs .ph0{width:42px;height:42px;object-fit:cover;background:#3a3742;border:2px solid var(--text);margin-left:-10px;display:block}
+  .thumbs img:first-child,.thumbs .ph0:first-child{margin-left:0}
+  .thumbs .more{width:42px;height:42px;margin-left:-10px;border:2px solid var(--text);background:#3a3742;color:#d8d3e3;font:800 11px var(--font);display:flex;align-items:center;justify-content:center}
+  .dock .d-main{min-width:0;flex:1}
+  .dock .d-cap{font-size:10px;letter-spacing:1.6px;color:var(--rich-2);font-weight:800}
+  .dock .d-name{font-size:14px;font-weight:800}
+  .dock .d-name b{font-size:18px;font-variant-numeric:tabular-nums}
+  .dock .d-text{font-size:11.5px;color:#b9b5c3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dock .link-btn{color:#b9b5c3}
+  /* ---------- Buttons ---------- */
+  .btn{border:1px solid var(--rich);background:var(--rich);color:#fff;font:700 13px var(--font);padding:11px 22px;cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+  .btn:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
+  .btn svg{width:16px;height:16px}
+  .btn.ghost{background:#fff;color:var(--muted);border-color:var(--stroke)}
+  .btn.ghost:hover{color:var(--text);border-color:var(--rich)}
+  .btn.lg{padding:13px 30px;font-size:14px}
+  .btn.stale{box-shadow:0 0 0 4px var(--rich-soft)}
+  /* ---------- Step 2 layout ---------- */
+  .s2{display:grid;grid-template-columns:300px 1fr;gap:var(--gap);align-items:start}
+  .targets{position:sticky;top:84px;background:var(--card);border:1px solid var(--stroke-soft);border-top:3px solid var(--rich);max-height:calc(100vh - 110px);display:flex;flex-direction:column}
+  .targets-h{padding:14px 16px 10px;display:flex;align-items:baseline;justify-content:space-between;gap:8px;border-bottom:1px solid var(--stroke-soft)}
+  .targets-h b{font-size:14px;font-weight:900}
+  .targets-h b em{font-style:normal;color:var(--rich);font-size:18px;font-variant-numeric:tabular-nums;margin-left:4px}
+  .tlist{overflow:auto;flex:1}
+  .trow{display:grid;grid-template-columns:44px 1fr 22px;gap:10px;align-items:center;padding:8px 12px 8px 14px;border-bottom:1px solid var(--stroke-soft);cursor:pointer}
+  .trow:hover{background:var(--bg)}
+  .trow.hl{background:var(--rich-soft)}
+  .trow img,.trow .ph0{width:44px;height:44px;object-fit:cover;background:var(--bg-b);display:block}
+  .trow .tn{font-size:12px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trow .tn i{font-style:normal;font:800 9.5px var(--font);color:var(--rich);background:var(--rich-soft);padding:1px 5px;margin-right:5px}
+  .trow .tt{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+  .trow .rm{border:none;background:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0;line-height:1}
+  .trow .rm:hover{color:var(--err)}
+  .stack{display:flex;flex-direction:column;gap:var(--gap);min-width:0}
+  .panel{background:var(--card);border:1px solid var(--stroke-soft);padding:18px 20px}
+  .ph{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .ph h2{margin:0;font-size:15px;font-weight:900;display:flex;align-items:center;gap:10px}
+  .ph h2 .n{font-family:var(--font-display);font-size:11px;color:#fff;background:var(--rich);padding:3px 7px;letter-spacing:.5px}
+  .ph .sub{font-size:11.5px;color:var(--dim)}
+  .opts{display:flex;align-items:center;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:12px}
+  .toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+  .toggle input{appearance:none;width:32px;height:18px;background:var(--stroke);position:relative;cursor:pointer;transition:.15s;margin:0}
+  .toggle input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;transition:.15s}
+  .toggle input:checked{background:var(--rich)}
+  .toggle input:checked::after{left:16px}
+  .img-note{font-size:10.5px;color:var(--dim)}
+  .sub-fold{border:1px solid var(--stroke-soft);background:var(--bg);margin-bottom:14px}
+  .sub-fold>summary{padding:10px 12px;font-size:12.5px;font-weight:800;color:var(--muted)}
+  .sub-fold .body{padding:0 12px 12px}
+  .lbl{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--rich);font-weight:800;margin:4px 0 8px;display:flex;align-items:baseline;gap:8px}
+  .lbl span{color:var(--dim);font-weight:500;letter-spacing:0;text-transform:none}
+  .presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  textarea.ta{width:100%;border:1px solid var(--stroke);background:#fff;font:12.5px/1.65 var(--font);padding:9px 11px;color:var(--text);outline:none;resize:vertical}
+  textarea.ta:focus{border-color:var(--rich);box-shadow:0 0 0 3px var(--rich-soft)}
+  .cnt{font-size:10.5px;color:var(--dim);text-align:right;font-variant-numeric:tabular-nums;margin-top:4px}
+  .runbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .run-note{font-size:11.5px;color:var(--dim);line-height:1.6;flex:1;min-width:200px}
+  .run-note b{color:var(--rich)}
+  .run-side{display:flex;align-items:center;gap:12px;font-size:11.5px;color:var(--muted)}
+  .login{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding:12px;background:var(--bg);border:1px solid var(--stroke-soft)}
+  .login label{font-size:12px;color:var(--muted);font-weight:700}
+  .login input{border:1px solid var(--stroke);background:#fff;font:13px var(--font);padding:8px 10px;min-width:180px;outline:none}
+  .login input:focus{border-color:var(--rich);box-shadow:0 0 0 3px var(--rich-soft)}
+  .login .err{font-size:12px;color:var(--err);font-weight:700}
+  .login .remember{font-size:11px;color:var(--dim);flex-basis:100%}
+  .status{margin-top:14px;font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:10px}
+  .status.error{color:var(--err);font-weight:700}
+  .status.stale{color:var(--warn)}
+  .status .warn{color:var(--warn)}
+  .spin{width:14px;height:14px;border:2px solid var(--rich-soft);border-top-color:var(--rich);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* ---------- Result ---------- */
+  .headline{font-size:15px;font-weight:800;line-height:1.75;padding:14px 18px;background:linear-gradient(90deg,var(--rich-soft),transparent);border-left:4px solid var(--rich);margin-bottom:14px}
+  .gtools{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;padding:10px 12px;background:var(--bg);border:1px solid var(--stroke-soft);border-bottom:none;font-size:12px;color:var(--muted)}
+  .gtools .grp{display:flex;align-items:center;gap:6px}
+  .gtools .sp{flex:1}
+  .tchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--stroke);background:#fff;padding:5px 10px;font:700 11.5px var(--font);color:var(--muted);cursor:pointer}
+  .tchip i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+  .tchip.on{border-color:var(--c);color:var(--text)}
+  .tchip:not(.on) i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--c)}
+  .tchip.fixed{cursor:default}
+  .tchip em{font-style:normal;color:var(--dim);font-variant-numeric:tabular-nums}
+  input[type=range]{accent-color:var(--rich);width:110px}
+  .wv{font-weight:900;color:var(--rich);font-variant-numeric:tabular-nums;min-width:12px;display:inline-block}
+  .gwrap{position:relative;border:1px solid var(--stroke-soft);background:
+    radial-gradient(circle at 50% 50%, rgba(122,88,176,.07), transparent 42%),
+    linear-gradient(90deg, rgba(47,127,163,.045), transparent 35%, transparent 65%, rgba(208,116,60,.045)), #fff}
+  #graph{height:640px;width:100%}
+  #graph svg{width:100%;height:100%;display:block;cursor:grab}
+  #graph svg:active{cursor:grabbing}
+  .side-lbl{position:absolute;top:10px;font:800 10.5px var(--font);letter-spacing:1.6px;pointer-events:none}
+  .side-lbl.l{left:14px;color:var(--exp)} .side-lbl.c{left:50%;transform:translateX(-50%);color:var(--asset)} .side-lbl.r{right:14px;color:var(--emo)}
+  .ghint{position:absolute;bottom:8px;left:12px;font-size:10.5px;color:var(--dim);pointer-events:none}
+  .gempty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;text-align:center;line-height:1.7}
+  .gempty b{display:block;color:var(--muted);font-size:14px}
+  /* SVG */
+  .lk-line{fill:none;stroke-linecap:round;transition:opacity .15s}
+  .lk-hit{stroke:transparent;fill:none;cursor:pointer}
+  .nd{cursor:pointer}
+  .nd circle{stroke:#fff;stroke-width:2.5px;transition:opacity .15s}
+  .nd text{font-family:var(--font);paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round;fill:var(--text);pointer-events:none;transition:opacity .15s}
+  .nd.asset text{font-weight:900;font-size:13px}
+  .nd.experience text,.nd.emotion text{font-weight:700;font-size:11.5px}
+  .nd text.ncnt{font:800 10px var(--font);fill:#fff;stroke:none}
+  svg.focus .lk-line:not(.hi){opacity:.06!important}
+  svg.focus .nd:not(.hi) circle,svg.focus .nd:not(.hi) text{opacity:.18}
+  .nd.sel circle{stroke:var(--text);stroke-width:3px}
+  .lk-line.sel{stroke:var(--text)!important;opacity:1!important}
+  /* detail */
+  .detail{border:1px solid var(--stroke-soft);border-top:none;padding:14px 16px 16px;min-height:86px}
+  .detail .ph0txt{color:var(--dim);font-size:12px;line-height:1.7}
+  .d-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .tbadge{font:800 10px var(--font);letter-spacing:1px;padding:3px 8px;color:#fff;background:var(--c)}
+  .d-title{font-size:16px;font-weight:900}
+  .d-desc{font-size:12.5px;line-height:1.75;color:var(--muted);margin:0 0 10px}
+  .d-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .d-sec{font-size:10.5px;letter-spacing:1.4px;color:var(--dim);font-weight:800;margin:6px 0 8px;text-transform:uppercase}
+  .nb{display:flex;flex-direction:column;gap:4px}
+  .nb button{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;text-align:left;border:1px solid var(--stroke-soft);background:#fff;padding:6px 8px;cursor:pointer;font:12px var(--font);color:var(--text)}
+  .nb button:hover{border-color:var(--rich)}
+  .nb button i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+  .meter{display:inline-flex;gap:2px;align-items:center}
+  .meter u{text-decoration:none;width:9px;height:6px;background:var(--stroke)}
+  .meter u.on{background:var(--rich)}
+  .meter b{font:800 10.5px var(--font);color:var(--muted);margin-left:5px}
+  .pthumbs{display:flex;flex-wrap:wrap;gap:6px}
+  .pthumbs button{border:1px solid var(--stroke-soft);background:#fff;padding:0;cursor:pointer;width:62px;position:relative}
+  .pthumbs button:hover{border-color:var(--rich)}
+  .pthumbs img,.pthumbs .ph0{width:60px;height:60px;object-fit:cover;display:block;background:var(--bg-b)}
+  .pthumbs span{position:absolute;left:0;top:0;font:800 9.5px var(--font);background:var(--rich);color:#fff;padding:1px 4px}
+  .reason{font-size:12.5px;line-height:1.75;background:var(--bg);padding:8px 12px;border-left:2px solid var(--rich);margin:6px 0 10px}
+  .sec{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim);font-weight:800;margin:20px 0 10px}
+  .sec::after{content:"";flex:1;height:1px;background:var(--stroke-soft)}
+  ul.li{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  ul.li li{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;line-height:1.65;background:var(--bg);padding:8px 10px}
+  ul.li li i{font-style:normal;flex:none;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;background:var(--rich);color:#fff;font:800 11px var(--font)}
+  .caveats{font-size:11.5px;color:var(--muted);background:var(--bg);padding:10px 14px;line-height:1.7;margin-top:14px}
+  .caveats b{color:var(--warn);margin-right:6px}
+  .r-meta{font-size:11px;color:var(--dim)}
+  .placeholder{border:1px dashed var(--stroke);padding:34px 20px;text-align:center;color:var(--dim);font-size:12.5px;line-height:1.7}
+  .placeholder b{display:block;color:var(--muted);font-size:14px;margin-bottom:4px}
+  .note{font-size:10.5px;color:var(--dim);line-height:1.7;margin-top:12px}
+  /* modal */
+  .modal{position:fixed;inset:0;z-index:60;background:rgba(20,16,30,.62);display:none;align-items:center;justify-content:center;padding:24px}
+  .modal.show{display:flex}
+  .modal-in{background:#fff;max-width:880px;width:100%;max-height:90vh;display:grid;grid-template-columns:1.1fr 1fr;overflow:hidden;position:relative}
+  .modal-media{background:#111;display:flex;align-items:center;justify-content:center;min-height:300px}
+  .modal-media img{max-width:100%;max-height:90vh;object-fit:contain;display:block}
+  .modal-media .noimg{color:#888;font-size:12px}
+  .modal-body{padding:24px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+  .modal-body .mn{font-size:16px;font-weight:900;padding-right:30px}
+  .modal-body .mt{font-size:13px;line-height:1.85;white-space:pre-wrap}
+  .modal-body .md{font-size:11px;color:var(--dim)}
+  .modal-x{position:absolute;top:10px;right:12px;width:34px;height:34px;border:none;background:rgba(255,255,255,.9);font-size:22px;cursor:pointer;color:var(--muted)}
+  body.lock{overflow:hidden}
+  .fade{animation:fade .3s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @media (max-width:1020px){
+    .s2{grid-template-columns:1fr}
+    .targets{position:static;max-height:300px}
+    .d-cols{grid-template-columns:1fr}
+  }
+  @media (max-width:720px){
+    .appbar-in{padding:10px 14px;gap:10px}
+    .brand{font-size:16px} .brand small{display:none}
+    .appbar-meta{display:none}
+    .stepper{justify-content:flex-end}
+    .step-line{flex:0 1 18px;margin:0 6px}
+    .step-tab .lt{display:none} .step-tab.active .lt{display:inline}
+    main{padding:14px 12px 110px}
+    .page-head h1{font-size:19px}
+    .search,.search input{width:100%}
+    .search input{font-size:16px}
+    .f-top .f-group{flex:1 1 100%}
+    .f-foot{margin-left:0;width:100%;justify-content:space-between}
+    .grid{grid-template-columns:1fr 1fr;gap:8px}
+    .pcard .body{padding:8px 9px 10px;gap:5px}
+    .pcard .badges,.pcard .pdate{display:none}
+    .pcard .text{font-size:11px;-webkit-line-clamp:2;min-height:0}
+    .dock-in{margin:0;gap:10px}
+    .thumbs{display:none}
+    .dock .d-text{display:none}
+    .panel{padding:14px 12px}
+    #graph{height:480px}
+    .side-lbl{display:none}
+    .modal{padding:0;align-items:flex-end}
+    .modal-in{grid-template-columns:1fr;max-height:92vh;overflow:auto}
+    .modal-media{min-height:0;max-height:45vh}
+    .modal-media img{max-height:45vh}
+  }
+</style>
+</head>
+<body>
+<!-- ================= App bar ================= -->
+<header class="appbar">
+  <div class="appbar-in">
+    <div class="brand">DROP<i>.</i> Graph<small>ASSET × EXPERIENCE × EMOTION</small></div>
+    <nav class="stepper" aria-label="ステップ">
+      <button type="button" class="step-tab active" id="tab1"><b>01</b><span class="lt">投稿を選ぶ</span></button>
+      <span class="step-line"></span>
+      <button type="button" class="step-tab" id="tab2" disabled><b>02</b><span class="lt">関係を分析する</span></button>
+    </nav>
+    <div class="appbar-meta">
+      <span>データ更新 <b id="metaUpdated">–</b></span>
+      <span id="userBox" hidden>ログイン中 <button type="button" class="link-btn" id="logoutBtn">ログアウト</button></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ================= STEP 1 ================= -->
+  <section id="step1">
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Step 01</div>
+        <h1>分析する投稿を選ぶ（複数選択）</h1>
+        <p>カードをクリックして選択・解除します。絞り込んだうえで「表示中をすべて選択」も使えます。</p>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="f-top">
+        <div class="f-group">
+          <div class="f-title">ユーザー名・本文</div>
+          <label class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input type="search" id="fName" list="nameList" placeholder="ユーザー名・本文で検索（例：綿業会館）" autocomplete="off" enterkeyhint="search" />
+            <datalist id="nameList"></datalist>
+          </label>
+        </div>
+        <div class="f-foot">
+          <span><b id="fCount">0</b> 件 / 全 <span id="fTotal">0</span> 件</span>
+          <button type="button" class="link-btn" id="fReset">条件をクリア</button>
+        </div>
+      </div>
+      <details class="fold f-more" id="fMore">
+        <summary><span class="chev"></span>詳細フィルタ（性別・年齢層・投稿日・並び順）<span class="fold-state" id="fMoreState">未設定</span></summary>
+        <div class="f-more-body">
+          <div class="f-group"><div class="f-title">性別</div><div class="chips" id="fGender"></div></div>
+          <div class="f-group"><div class="f-title">年齢層</div><div class="chips" id="fAge"></div></div>
+          <div class="f-group"><div class="f-title">投稿日</div><div class="chips" id="fDate"></div></div>
+          <div class="f-group">
+            <div class="f-title">並び順</div>
+            <select class="sel" id="fSort">
+              <option value="new">投稿日が新しい順</option>
+              <option value="old">投稿日が古い順</option>
+              <option value="like">いいねが多い順</option>
+              <option value="pv">PVが多い順</option>
+            </select>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="bulk">
+      <button type="button" class="btn-s" id="selVisible">表示中をすべて選択</button>
+      <button type="button" class="btn-s" id="unselVisible">表示中の選択を解除</button>
+      <button type="button" class="btn-s" id="selClear">選択をすべて解除</button>
+      <span class="sp"></span>
+      <span>選択中 <b id="selCount">0</b> / 上限 <span id="selMax">–</span> 件</span>
+    </div>
+
+    <div class="grid" id="postGrid"><div class="empty"><b>読み込み中…</b>投稿データを取得しています</div></div>
+  </section>
+
+  <!-- ================= STEP 2 ================= -->
+  <section id="step2" hidden>
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Step 02</div>
+        <h1>環境資産 × 体験 × 感情 を分析する</h1>
+        <p>選んだ投稿の写真と本文を AI が読み取り、環境資産を中心に体験・感情とのつながりをグラフにします。</p>
+      </div>
+      <button type="button" class="btn ghost" id="backBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H6"/><path d="M11 6l-6 6 6 6"/></svg>投稿を選び直す
+      </button>
+    </div>
+
+    <div class="s2">
+      <!-- 分析対象 -->
+      <aside class="targets">
+        <div class="targets-h"><b>分析対象<em id="tCount">0</em> 件</b><span class="sub" style="font-size:11px;color:var(--dim)">行クリックで詳細</span></div>
+        <div class="tlist" id="tList"></div>
+      </aside>
+
+      <div class="stack">
+        <!-- 実行 -->
+        <div class="panel" style="border-top:3px solid var(--rich)">
+          <div class="ph"><h2><span class="n">A</span>分析の実行</h2><span class="sub">分析には数十秒〜数分かかります</span></div>
+          <div class="opts">
+            <label class="toggle"><input type="checkbox" id="sendImg" />画像も解析<span class="img-note" id="imgNote"></span></label>
+          </div>
+          <details class="fold sub-fold" id="instrFold">
+            <summary><span class="chev"></span>追加の指示（任意）<span class="fold-state" id="optState">なし</span></summary>
+            <div class="body">
+              <div class="lbl">よく使う指示<span>タップで追加／解除</span></div>
+              <div class="presets" id="presets"></div>
+              <textarea class="ta" id="instr" rows="4" maxlength="400" placeholder="例）建物ごとに環境資産を分けてください。感情は 8 個以内にまとめてください。"></textarea>
+              <div class="cnt" id="instrCnt">0 / 400</div>
+            </div>
+          </details>
+          <div class="runbar">
+            <button type="button" class="btn lg" id="runBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="4.5" cy="6" r="2"/><circle cx="19.5" cy="6" r="2"/><circle cx="4.5" cy="18" r="2"/><circle cx="19.5" cy="18" r="2"/><path d="M6.3 7l3.3 3M17.7 7l-3.3 3M6.3 17l3.3-3M17.7 17l-3.3-3"/></svg>
+              <span id="runLabel">関係を分析する</span>
+            </button>
+            <div class="run-note" id="runNote">–</div>
+            <div class="run-side"><button type="button" class="link-btn" id="forceBtn" hidden title="キャッシュを使わずに再分析します">再分析</button></div>
+          </div>
+          <form class="login" id="login" hidden autocomplete="on">
+            <input type="text" name="username" autocomplete="username" value="drop-graph" hidden />
+            <label for="lPw">パスワード</label>
+            <input type="password" id="lPw" autocomplete="current-password" required />
+            <button type="submit" class="btn" id="loginBtn">認証して実行</button>
+            <span class="err" id="loginErr"></span>
+            <span class="remember">パスワードはこの端末のブラウザに保存され、次回から自動でログインします（ログアウトで削除）。</span>
+          </form>
+          <div class="status" id="status" hidden></div>
+        </div>
+
+        <!-- 結果 -->
+        <div class="panel" id="resultPanel">
+          <div class="ph"><h2><span class="n">✦</span>関係グラフ</h2><span class="sub" id="resultMeta">未実行</span></div>
+          <div id="result">
+            <div class="placeholder"><b>まだ分析していません</b>分析対象を確認して「関係を分析する」を押してください。</div>
+          </div>
+          <div class="note">AI による自動分析です。件数が少ない場合は偶然の影響が大きいため、傾向をつかむ参考としてご利用ください。送信するのは選択した投稿の本文（一部）・投稿者名・投稿日・いいね数・PV 数・性別・年代、「画像も解析」が ON のときは投稿画像（このブラウザで長辺 512px に縮小したもの）、および追加の指示のみで、アカウント ID・位置情報は送信しません。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 選択ドック -->
+<div class="dock" id="dock">
+  <div class="dock-in">
+    <div class="thumbs" id="dockThumbs"></div>
+    <div class="d-main">
+      <div class="d-cap">SELECTED</div>
+      <div class="d-name"><b id="dockCount">0</b> 件を選択中</div>
+      <div class="d-text" id="dockText">–</div>
+    </div>
+    <button type="button" class="link-btn" id="dockClear">すべて解除</button>
+    <button type="button" class="btn" id="toStep2">選択した投稿で分析へ
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- 投稿詳細モーダル -->
+<div class="modal" id="modal" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="modal-in">
+    <button type="button" class="modal-x" id="modalX" aria-label="閉じる">&times;</button>
+    <div class="modal-media" id="modalMedia"></div>
+    <div class="modal-body">
+      <div class="mn" id="modalName"></div>
+      <div class="badges" id="modalBadges"></div>
+      <div class="metrics" id="modalMetrics"></div>
+      <div class="md" id="modalDate"></div>
+      <div class="mt" id="modalText"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   設定
+   - GAS_URL : グラフ分析用 GAS（GAS_GRAPH.gs）の /exec URL
+   - 投稿データは json/mart_action_drop_engagement.json から読み込む
+===================================================================== */
+const CONFIG = {
+  DATA_SOURCES: ["json/mart_action_drop_engagement.json"],
+  GAS_URL: "https://script.google.com/macros/s/AKfycbypfYp6oA_WpNlOXxof1eqZgHuh9a33jm1KVV8c0RbRxcYaSEMFtmGf_AVyxnBTgdMiqQ/exec",
+  TIMEOUT_MS: 300000,       // 投稿数・画像数が多いと時間がかかるため長め（GAS の上限は 6 分）
+  MAX_POSTS: 30,            // 1 回で分析できる投稿数（GAS 側 MAX_POSTS と合わせる）
+  SEND_IMAGES: true,        // 画像解析の初期値（UI で切替可）
+  IMG_MAX: 10,              // 画像を送る投稿の上限（投稿日順に先頭から。GAS 側 MAX_IMAGES と合わせる）
+  IMG_MAX_EDGE: 512,
+  IMG_QUALITY: 0.8,
+  IMG_TIMEOUT_MS: 8000,
+  MAX_TEXT: 300,
+  MAX_INSTR: 400,
+  EXCLUDE: /^[\s　]*(テスト[\s　]*)+$/,
+  PRESETS: ["建物ごとに環境資産を分ける", "感情は 8 個以内にまとめる", "施設側の告知で想定される体験も含める", "写真から読み取れる行動を重視する"],
+  KEYS: { TOKEN: "dropGraphToken", PW: "dropGraphPw", PREFS: "dropGraphPrefs", SEL: "dropGraphSelected" }
+};
+const TYPES = {
+  asset:      { label: "環境資産", short: "ASSET",      color: "var(--asset)", hex: "#7a58b0" },
+  experience: { label: "体験",     short: "EXPERIENCE", color: "var(--exp)",   hex: "#2f7fa3" },
+  emotion:    { label: "感情",     short: "EMOTION",    color: "var(--emo)",   hex: "#d0743c" }
+};
+
+/* ---------- 共通 ---------- */
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString("ja-JP");
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const gLabel = g => (g && String(g).trim() ? g : "未設定");
+const aLabel = a => (a && String(a).trim() ? a : "未設定");
+const ageKey = a => { const m = /(\d+)/.exec(a || ""); return m ? parseInt(m[1], 10) : Infinity; };
+const oneLine = s => String(s || "").replace(/\s+/g, " ").trim();
+const cmpT = (a, b) => (a.t > b.t ? 1 : a.t < b.t ? -1 : 0);
+const ICON = {
+  like: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  pv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+};
+
+/* ---------- 状態 ---------- */
+let POSTS = [];
+const S = {
+  f: { q: "", genders: new Set(), ages: new Set(), dates: new Set(), sort: "new" },
+  selected: new Set(), step: 1,
+  instr: "", sendImages: CONFIG.SEND_IMAGES,
+  busy: false, lastKey: null,
+  // 分析結果
+  run: null,            // { result, idMap:{P1:artwork_id}, model, ... }
+  view: { types: new Set(["asset", "experience", "emotion"]), minW: 1 },
+  focus: null,          // { kind:"node"|"edge", id }
+  pos: new Map()        // ノード位置のキャッシュ（再描画時に維持）
+};
+
+/* ---------- データ ---------- */
+async function loadData() {
+  let last;
+  for (const s of CONFIG.DATA_SOURCES) {
+    try { const r = await fetch(s); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); }
+    catch (e) { last = e; }
+  }
+  throw last;
+}
+function normalize(records) {
+  return records.map(r => {
+    const s = (r.sentence || "").trim();
+    return {
+      id: r.artwork_id, n: r.account_name || "", s,
+      g: r.gender || "", a: r.age_group || "", t: r.post_dated_at || "",
+      date: r.post_date || (r.post_dated_at || "").slice(0, 10),
+      thumb: r.image_file_path_thumbnail || "", img: r.image_file_path || r.image_file_path_thumbnail || "",
+      like: Number(r.like_count) || 0, pv: Number(r.pv_count) || 0,
+      test: CONFIG.EXCLUDE.test(s)
+    };
+  });
+}
+const byId = id => POSTS.find(p => p.id === id);
+const passFilter = p => {
+  const q = S.f.q.trim().toLowerCase();
+  if (q && !p.n.toLowerCase().includes(q) && !p.s.toLowerCase().includes(q)) return false;
+  if (S.f.genders.size && !S.f.genders.has(p.g)) return false;
+  if (S.f.ages.size && !S.f.ages.has(p.a)) return false;
+  if (S.f.dates.size && !S.f.dates.has(p.date)) return false;
+  return true;
+};
+/** 選択中の投稿（投稿日の古い順。P1, P2 … の採番順） */
+const selectedPosts = () => [...S.selected].map(byId).filter(p => p && !p.test).sort(cmpT);
+
+/* ---------- 設定の保存 ---------- */
+function savePrefs() {
+  try {
+    localStorage.setItem(CONFIG.KEYS.PREFS, JSON.stringify({ instr: S.instr, sendImages: S.sendImages, instrOpen: $("instrFold").open, fMoreOpen: $("fMore").open }));
+    localStorage.setItem(CONFIG.KEYS.SEL, JSON.stringify([...S.selected]));
+  } catch (e) {}
+}
+function loadPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(CONFIG.KEYS.PREFS) || "null");
+    if (p) {
+      S.instr = String(p.instr || "").slice(0, CONFIG.MAX_INSTR);
+      if (typeof p.sendImages === "boolean") S.sendImages = p.sendImages;
+      $("instrFold").open = !!p.instrOpen;
+      $("fMore").open = !!p.fMoreOpen;
+    }
+  } catch (e) {}
+}
+function restoreSelection() {
+  try {
+    const ids = JSON.parse(localStorage.getItem(CONFIG.KEYS.SEL) || "[]");
+    ids.forEach(id => { const p = byId(id); if (p && !p.test && S.selected.size < CONFIG.MAX_POSTS) S.selected.add(id); });
+  } catch (e) {}
+}
+
+/* =====================================================================
+   STEP 1：投稿の複数選択
+===================================================================== */
+function buildFilters() {
+  const cnt = key => POSTS.reduce((m, p) => m.set(p[key], (m.get(p[key]) || 0) + 1), new Map());
+  const gc = cnt("g"), ac = cnt("a"), dc = cnt("date");
+  const genders = [...gc.keys()].sort((a, b) => (a === "") - (b === "") || gc.get(b) - gc.get(a) || a.localeCompare(b, "ja"));
+  const ages = [...ac.keys()].sort((a, b) => (a === "") - (b === "") || ageKey(a) - ageKey(b) || a.localeCompare(b, "ja"));
+  const dates = [...dc.keys()].filter(Boolean).sort();
+  const chip = (t, v, l, n) => `<button type="button" class="chip" data-t="${t}" data-v="${esc(v)}">${esc(l)}<span>${n}</span></button>`;
+  $("fGender").innerHTML = genders.map(g => chip("g", g, gLabel(g), gc.get(g))).join("");
+  $("fAge").innerHTML = ages.map(a => chip("a", a, aLabel(a), ac.get(a))).join("");
+  $("fDate").innerHTML = dates.map(d => chip("d", d, d.slice(5).replace("-", "/"), dc.get(d))).join("");
+  const sets = { g: S.f.genders, a: S.f.ages, d: S.f.dates };
+  document.querySelectorAll(".chip[data-t]").forEach(b => b.addEventListener("click", () => {
+    const set = sets[b.dataset.t], v = b.dataset.v;
+    set.has(v) ? set.delete(v) : set.add(v);
+    b.classList.toggle("on", set.has(v));
+    renderGrid();
+  }));
+  const names = [...new Set(POSTS.map(p => p.n).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+  $("nameList").innerHTML = names.map(n => `<option value="${esc(n)}"></option>`).join("");
+  $("fName").addEventListener("input", () => { S.f.q = $("fName").value; renderGrid(); });
+  $("fName").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+  $("fMore").addEventListener("toggle", savePrefs);
+  $("fSort").addEventListener("change", () => { S.f.sort = $("fSort").value; renderGrid(); });
+  $("fReset").addEventListener("click", () => {
+    S.f.q = ""; S.f.genders.clear(); S.f.ages.clear(); S.f.dates.clear(); S.f.sort = "new";
+    $("fName").value = ""; $("fSort").value = "new";
+    document.querySelectorAll(".chip[data-t]").forEach(b => b.classList.remove("on"));
+    renderGrid();
+  });
+  $("selMax").textContent = CONFIG.MAX_POSTS;
+}
+function syncFilterState() {
+  const on = [S.f.genders.size && `性別 ${S.f.genders.size}`, S.f.ages.size && `年齢層 ${S.f.ages.size}`, S.f.dates.size && `投稿日 ${S.f.dates.size}`, S.f.sort !== "new" && "並び順"].filter(Boolean);
+  $("fMoreState").textContent = on.length ? on.join("・") + " を適用中" : "未設定";
+  $("fMoreState").classList.toggle("on", !!on.length);
+}
+function visiblePosts() {
+  const list = POSTS.filter(passFilter);
+  const sorters = {
+    new: (a, b) => cmpT(b, a), old: cmpT,
+    like: (a, b) => b.like - a.like || b.pv - a.pv,
+    pv: (a, b) => b.pv - a.pv || b.like - a.like
+  };
+  return list.sort(sorters[S.f.sort]);
+}
+function renderGrid() {
+  syncFilterState();
+  const list = visiblePosts();
+  $("fCount").textContent = list.length;
+  $("fTotal").textContent = POSTS.length;
+  if (!list.length) { $("postGrid").innerHTML = '<div class="empty"><b>該当する投稿がありません</b>絞り込み条件を変更してください</div>'; syncSelection(); return; }
+  $("postGrid").innerHTML = list.map(p => `
+    <div role="button" tabindex="0" class="pcard${S.selected.has(p.id) ? " sel" : ""}${p.test ? " dis" : ""}" data-id="${esc(p.id)}" aria-pressed="${S.selected.has(p.id)}" title="${p.test ? "テスト投稿は分析できません" : ""}">
+      <div class="media">${p.thumb ? `<img src="${esc(p.thumb)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : ""}
+        <span class="check">${ICON.check}</span>
+        <button type="button" class="zoom" data-zoom="${esc(p.id)}">拡大</button>
+      </div>
+      <div class="body">
+        <div class="name" title="${esc(p.n)}">${esc(p.n || "投稿者名なし")}</div>
+        <div class="badges"><span class="badge g">${esc(gLabel(p.g))}</span><span class="badge a">${esc(aLabel(p.a))}</span>${p.test ? '<span class="badge test">テスト投稿</span>' : ""}</div>
+        <div class="text">${esc(oneLine(p.s))}</div>
+        <div class="foot">
+          <div class="metrics"><span class="lk">${ICON.like}${fmt(p.like)}</span><span class="pv">${ICON.pv}${fmt(p.pv)}</span></div>
+          <span class="pdate">${esc(p.t.slice(0, 16))}</span>
+        </div>
+      </div>
+    </div>`).join("");
+  $("postGrid").querySelectorAll(".pcard").forEach(c => {
+    c.addEventListener("click", e => {
+      const z = e.target.closest("[data-zoom]");
+      if (z) { e.stopPropagation(); openModal(byId(z.dataset.zoom)); return; }
+      toggleSelect(c.dataset.id);
+    });
+    c.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleSelect(c.dataset.id); } });
+  });
+  syncSelection();
+}
+function toggleSelect(id) {
+  const p = byId(id); if (!p || p.test) return;
+  if (S.selected.has(id)) S.selected.delete(id);
+  else {
+    if (S.selected.size >= CONFIG.MAX_POSTS) { flashLimit(); return; }
+    S.selected.add(id);
+  }
+  syncSelection();
+}
+function flashLimit() {
+  const el = $("selCount").parentElement;
+  el.style.color = "var(--err)"; el.style.fontWeight = "800";
+  setTimeout(() => { el.style.color = ""; el.style.fontWeight = ""; }, 1400);
+}
+/** カードの選択表示・件数・ドックを同期 */
+function syncSelection() {
+  $("postGrid").querySelectorAll(".pcard").forEach(c => {
+    const on = S.selected.has(c.dataset.id);
+    c.classList.toggle("sel", on); c.setAttribute("aria-pressed", on);
+  });
+  $("selCount").textContent = S.selected.size;
+  const vis = visiblePosts().filter(p => !p.test);
+  $("selVisible").disabled = !vis.some(p => !S.selected.has(p.id)) || S.selected.size >= CONFIG.MAX_POSTS;
+  $("unselVisible").disabled = !vis.some(p => S.selected.has(p.id));
+  $("selClear").disabled = !S.selected.size;
+  savePrefs();
+  syncDock(); syncTabs();
+}
+$("selVisible").addEventListener("click", () => {
+  const vis = visiblePosts().filter(p => !p.test && !S.selected.has(p.id));
+  let over = false;
+  for (const p of vis) { if (S.selected.size >= CONFIG.MAX_POSTS) { over = true; break; } S.selected.add(p.id); }
+  if (over) flashLimit();
+  syncSelection();
+});
+$("unselVisible").addEventListener("click", () => { visiblePosts().forEach(p => S.selected.delete(p.id)); syncSelection(); });
+$("selClear").addEventListener("click", () => { S.selected.clear(); syncSelection(); });
+$("dockClear").addEventListener("click", () => { S.selected.clear(); syncSelection(); });
+
+function syncDock() {
+  const list = selectedPosts();
+  $("dock").classList.toggle("show", list.length > 0 && S.step === 1);
+  if (!list.length) return;
+  const shown = list.slice(-6);
+  $("dockThumbs").innerHTML = shown.map(p => p.thumb ? `<img src="${esc(p.thumb)}" alt="" onerror="this.style.visibility='hidden'">` : '<span class="ph0"></span>').join("")
+    + (list.length > shown.length ? `<span class="more">+${list.length - shown.length}</span>` : "");
+  $("dockCount").textContent = list.length;
+  const names = [...new Set(list.map(p => p.n || "投稿者名なし"))];
+  $("dockText").textContent = names.slice(0, 4).join("・") + (names.length > 4 ? ` ほか ${names.length - 4} アカウント` : "");
+}
+
+/* =====================================================================
+   画面切替
+===================================================================== */
+function syncTabs() {
+  $("tab1").classList.toggle("active", S.step === 1);
+  $("tab2").classList.toggle("active", S.step === 2);
+  $("tab1").classList.toggle("done", S.step === 2);
+  $("tab2").disabled = !selectedPosts().length;
+}
+function goStep(n) {
+  if (n === 2 && !selectedPosts().length) return;
+  S.step = n;
+  $("step1").hidden = n !== 1; $("step2").hidden = n !== 2;
+  $(n === 1 ? "step1" : "step2").classList.add("fade");
+  if (n === 1) renderGrid();
+  if (n === 2) { renderTargets(); syncImgNote(); checkStale(); if (S.run) requestAnimationFrame(drawGraph); }
+  syncDock(); syncTabs();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("tab1").addEventListener("click", () => goStep(1));
+$("tab2").addEventListener("click", () => goStep(2));
+$("toStep2").addEventListener("click", () => goStep(2));
+$("backBtn").addEventListener("click", () => goStep(1));
+
+/* =====================================================================
+   STEP 2：分析対象・設定
+===================================================================== */
+function renderTargets() {
+  const list = selectedPosts();
+  $("tCount").textContent = list.length;
+  // 実行済みの結果があれば、その P 番号を表示（結果と対応づけるため）
+  const rev = S.run ? Object.fromEntries(Object.entries(S.run.idMap).map(([k, v]) => [v, k])) : {};
+  $("tList").innerHTML = list.length ? list.map(p => `
+    <div class="trow" data-id="${esc(p.id)}">
+      ${p.thumb ? `<img src="${esc(p.thumb)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<span class="ph0"></span>'}
+      <div style="min-width:0"><div class="tn">${rev[p.id] ? `<i>${rev[p.id]}</i>` : ""}${esc(p.n || "投稿者名なし")}</div><div class="tt">${esc(oneLine(p.s))}</div></div>
+      <button type="button" class="rm" title="分析対象から外す" aria-label="分析対象から外す">&times;</button>
+    </div>`).join("") : '<div class="placeholder" style="margin:12px;border:none">分析対象がありません。<br>Step 1 で投稿を選んでください。</div>';
+  $("tList").querySelectorAll(".trow").forEach(r => {
+    r.addEventListener("click", e => {
+      if (e.target.closest(".rm")) { S.selected.delete(r.dataset.id); savePrefs(); renderTargets(); syncImgNote(); checkStale(); syncTabs(); return; }
+      openModal(byId(r.dataset.id));
+    });
+  });
+}
+function syncImgNote() {
+  const n = Math.min(CONFIG.IMG_MAX, selectedPosts().filter(p => p.thumb).length);
+  $("sendImg").checked = S.sendImages;
+  $("imgNote").textContent = S.sendImages ? `（${n} 枚${selectedPosts().length > CONFIG.IMG_MAX ? `・上限 ${CONFIG.IMG_MAX} 枚` : ""}）` : "";
+  syncRunNote();
+}
+$("sendImg").addEventListener("change", () => { S.sendImages = $("sendImg").checked; savePrefs(); syncImgNote(); checkStale(); });
+
+function initPrompt() {
+  $("instr").value = S.instr;
+  $("presets").innerHTML = CONFIG.PRESETS.map(t => `<button type="button" class="chip" data-preset="${esc(t)}">${esc(t)}</button>`).join("");
+  const lines = () => $("instr").value.split("\n").map(s => s.trim()).filter(Boolean);
+  const syncPresets = () => { const l = lines(); $("presets").querySelectorAll("[data-preset]").forEach(b => b.classList.toggle("on", l.includes(b.dataset.preset))); };
+  const syncCnt = () => {
+    $("instrCnt").textContent = `${$("instr").value.length} / ${CONFIG.MAX_INSTR}`;
+    const on = !!S.instr.trim();
+    $("optState").textContent = on ? "反映中" : "なし";
+    $("optState").classList.toggle("on", on);
+  };
+  $("presets").querySelectorAll("[data-preset]").forEach(b => b.addEventListener("click", () => {
+    const l = lines(), t = b.dataset.preset;
+    $("instr").value = (l.includes(t) ? l.filter(x => x !== t) : [...l, t]).join("\n").slice(0, CONFIG.MAX_INSTR);
+    S.instr = $("instr").value; syncPresets(); syncCnt(); savePrefs(); checkStale();
+  }));
+  $("instr").addEventListener("input", () => { S.instr = $("instr").value; syncPresets(); syncCnt(); });
+  $("instr").addEventListener("change", () => { savePrefs(); checkStale(); });
+  $("instr").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); savePrefs(); run(false); } });
+  $("instrFold").addEventListener("toggle", savePrefs);
+  syncPresets(); syncCnt();
+}
+function syncRunNote() {
+  const n = selectedPosts().length;
+  $("runNote").innerHTML = n
+    ? `選択した <b>${n}</b> 件の投稿${S.sendImages ? "（写真つき）" : "（本文のみ）"}から、環境資産・体験・感情を抽出してつながりを分析します。`
+    : "分析対象の投稿がありません。";
+}
+
+/* =====================================================================
+   AI 呼び出し（GAS → Azure OpenAI）
+===================================================================== */
+function configured(url) { return !!url && !/X{6,}/.test(url); }
+function getToken() {
+  try { const t = JSON.parse(localStorage.getItem(CONFIG.KEYS.TOKEN) || "null"); if (t && t.token && t.exp > Date.now() + 30000) return t.token; } catch (e) {}
+  localStorage.removeItem(CONFIG.KEYS.TOKEN); return null;
+}
+function setToken(token, sec) { localStorage.setItem(CONFIG.KEYS.TOKEN, JSON.stringify({ token, exp: Date.now() + sec * 1000 })); }
+function clearToken() { localStorage.removeItem(CONFIG.KEYS.TOKEN); syncButtons(); }
+function getPw() { try { return localStorage.getItem(CONFIG.KEYS.PW) || ""; } catch (e) { return ""; } }
+function savePw(pw) { try { localStorage.setItem(CONFIG.KEYS.PW, pw); } catch (e) {} }
+function clearPw() { try { localStorage.removeItem(CONFIG.KEYS.PW); } catch (e) {} }
+
+async function post(body) {
+  const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
+  try {
+    // text/plain で送るとプリフライトが発生せず GAS でも CORS エラーにならない
+    const res = await fetch(CONFIG.GAS_URL, { method: "POST", redirect: "follow", signal: ctrl.signal, headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return await res.json();
+  } catch (e) {
+    if (e.name === "AbortError") return { ok: false, code: "TIMEOUT", message: `応答がありませんでした（${CONFIG.TIMEOUT_MS / 1000} 秒）。投稿数を減らすか、時間をおいて再分析してください` };
+    return { ok: false, code: "NETWORK", message: "GAS に接続できませんでした（" + e.message + "）" };
+  } finally { clearTimeout(to); }
+}
+async function doLogin(pw) {
+  const res = await post({ action: "login", password: pw });
+  if (!res.ok) return res;
+  setToken(res.token, res.expires_in);
+  return { ok: true };
+}
+async function autoLogin() {
+  const pw = getPw(); if (!pw) return false;
+  status('<span class="spin"></span><span>保存済みのパスワードでログインしています…</span>');
+  const r = await doLogin(pw);
+  if (r.ok) { status(""); syncButtons(); return true; }
+  if (r.code === "AUTH") clearPw();
+  S.authMsg = r.message;
+  return false;
+}
+
+/* ---------- 画像（ブラウザで取得・縮小して data URL にする） ---------- */
+const IMG_CACHE = new Map();
+function drawToDataUrl(src, w, h) {
+  const k = Math.min(1, CONFIG.IMG_MAX_EDGE / Math.max(w, h));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", CONFIG.IMG_QUALITY);
+}
+async function viaFetch(url) {
+  const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), CONFIG.IMG_TIMEOUT_MS);
+  try {
+    const r = await fetch(url, { mode: "cors", credentials: "omit", cache: "force-cache", signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    if ("createImageBitmap" in window) {
+      const bmp = await createImageBitmap(blob);
+      try { return drawToDataUrl(bmp, bmp.width, bmp.height); } finally { bmp.close && bmp.close(); }
+    }
+    const objUrl = URL.createObjectURL(blob);
+    try { return await viaImg(objUrl, false); } finally { URL.revokeObjectURL(objUrl); }
+  } finally { clearTimeout(to); }
+}
+function viaImg(url, cors = true) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    if (cors) img.crossOrigin = "anonymous";
+    const to = setTimeout(() => { img.src = ""; reject(new Error("timeout")); }, CONFIG.IMG_TIMEOUT_MS);
+    img.onload = () => { clearTimeout(to); try { resolve(drawToDataUrl(img, img.naturalWidth, img.naturalHeight)); } catch (e) { reject(e); } };
+    img.onerror = () => { clearTimeout(to); reject(new Error("load error")); };
+    img.src = url;
+  });
+}
+async function toDataUrlInBrowser(url) {
+  if (IMG_CACHE.has(url)) return IMG_CACHE.get(url);
+  let data = null;
+  try { data = await viaFetch(url); }
+  catch (e1) {
+    try { data = await viaImg(url); }
+    catch (e2) { console.warn("ブラウザで画像を読み取れませんでした（CORS 未許可の可能性）", url, e1.message, e2.message); }
+  }
+  if (data) IMG_CACHE.set(url, data);
+  return data;
+}
+async function attachImageData(posts) {
+  const targets = posts.filter(p => p.image);
+  const data = await Promise.all(targets.map(p => toDataUrlInBrowser(p.image)));
+  let ok = 0;
+  targets.forEach((p, i) => { if (data[i]) { p.image_data = data[i]; ok++; } });
+  return { total: targets.length, ok };
+}
+
+function buildPayload() {
+  const list = selectedPosts();
+  const idMap = {};
+  let nImg = 0;
+  const posts = list.map((p, i) => {
+    const id = "P" + (i + 1); idMap[id] = p.id;
+    const o = { id, name: p.n, date: p.date, text: oneLine(p.s).slice(0, CONFIG.MAX_TEXT), like: p.like, pv: p.pv, gender: gLabel(p.g), age: aLabel(p.a) };
+    if (S.sendImages && p.thumb && nImg < CONFIG.IMG_MAX) { o.image = p.thumb; nImg++; }
+    return o;
+  });
+  const instructions = S.instr.replace(/\r\n?/g, "\n").trim().slice(0, CONFIG.MAX_INSTR);
+  return { posts, idMap, instructions, key: JSON.stringify([list.map(p => p.id), instructions, S.sendImages]) };
+}
+function status(html, cls) { const st = $("status"); st.className = "status" + (cls ? " " + cls : ""); st.innerHTML = html; st.hidden = !html; }
+function syncButtons() {
+  $("runBtn").disabled = S.busy || !configured(CONFIG.GAS_URL);
+  $("runLabel").textContent = S.busy ? "分析中…" : "関係を分析する";
+  $("forceBtn").disabled = S.busy; $("loginBtn").disabled = S.busy;
+  $("userBox").hidden = !getToken();
+  if (!configured(CONFIG.GAS_URL)) status("GAS の URL が未設定です（CONFIG.GAS_URL）", "error");
+}
+function showLogin(msg) {
+  $("login").hidden = false; $("loginErr").textContent = msg || "";
+  $("lPw").value = getPw(); $("lPw").focus();
+}
+
+async function run(force) {
+  if (S.busy || S.step !== 2) return;
+  savePrefs();
+  if (!selectedPosts().length) { status("分析対象の投稿がありません", "error"); return; }
+  if (!getToken()) {
+    S.busy = true; syncButtons();
+    const ok = await autoLogin();
+    S.busy = false; syncButtons();
+    if (!ok) { S.pendingForce = !!force; showLogin(S.authMsg || ""); S.authMsg = ""; status("パスワードを入力してください"); return; }
+  }
+  const pl = buildPayload();
+  S.busy = true; syncButtons();
+  const t0 = Date.now();
+  let imgStat = { total: 0, ok: 0 };
+  if (pl.posts.some(p => p.image)) {
+    status('<span class="spin"></span><span>画像を準備しています…</span>');
+    imgStat = await attachImageData(pl.posts);
+  }
+  status(`<span class="spin"></span><span>AI が${imgStat.total ? "写真と本文を" : "本文を"}読み取り、関係を分析しています… <b id="sec">0</b> 秒</span>`);
+  const timer = setInterval(() => { const s = $("sec"); if (s) s.textContent = Math.floor((Date.now() - t0) / 1000); }, 250);
+  const res = await post({ action: "analyze", token: getToken(), posts: pl.posts, instructions: pl.instructions, force: !!force });
+  clearInterval(timer); S.busy = false; syncButtons();
+  const sec = ((Date.now() - t0) / 1000).toFixed(1);
+  if (!res.ok) {
+    if (res.code === "AUTH") {
+      clearToken();
+      if (!S.retried && getPw()) { S.retried = true; return run(force); }
+      S.pendingForce = !!force; showLogin(res.message); status(""); return;
+    }
+    status(esc(res.message || "分析に失敗しました"), "error"); $("forceBtn").hidden = false;
+    return;
+  }
+  S.retried = false;
+  S.lastKey = pl.key;
+  S.run = { result: res.result, idMap: pl.idMap, model: res.model, generated_at: res.generated_at, prompt_version: res.prompt_version, images_used: res.images_used, instructions: pl.instructions };
+  S.focus = null; S.pos.clear(); S.view.minW = 1; S.view.types = new Set(["asset", "experience", "emotion"]);
+  const at = res.generated_at ? new Date(res.generated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  $("resultMeta").textContent = `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""}${res.images_used ? ` ・ 画像 ${res.images_used} 枚` : ""}`;
+  const imgWarn = res.images_note ? `<span class="warn">※ ${esc(res.images_note)}</span>`
+    : imgStat.total && imgStat.ok < imgStat.total && !res.images_used ? `<span class="warn">※ 画像を読み取れなかったため本文のみで分析しました</span>` : "";
+  status(imgWarn); $("forceBtn").hidden = false; $("runBtn").classList.remove("stale");
+  renderTargets();
+  renderResult();
+  $("resultPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("runBtn").addEventListener("click", () => { S.retried = false; run(false); });
+$("forceBtn").addEventListener("click", () => { S.retried = false; run(true); });
+$("logoutBtn").addEventListener("click", () => { clearToken(); clearPw(); $("lPw").value = ""; status("ログアウトしました（保存したパスワードも削除しました）"); });
+$("login").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pw = $("lPw").value; if (!pw) return;
+  S.busy = true; syncButtons(); $("loginErr").textContent = "認証中…";
+  const r = await doLogin(pw);
+  S.busy = false; syncButtons();
+  if (!r.ok) { $("loginErr").textContent = r.message || "認証に失敗しました"; $("lPw").focus(); return; }
+  savePw(pw);
+  $("login").hidden = true; $("loginErr").textContent = ""; syncButtons();
+  run(S.pendingForce);
+});
+/** 条件が表示中の結果と違えば知らせる（自動実行はしない） */
+function checkStale() {
+  syncRunNote();
+  if (!S.lastKey || S.busy || S.step !== 2) return;
+  const stale = buildPayload().key !== S.lastKey;
+  $("runBtn").classList.toggle("stale", stale);
+  if (stale) status("分析対象または条件が変わりました。表示中のグラフは以前の条件のものです。「関係を分析する」で更新してください。", "stale");
+  else if ($("status").classList.contains("stale")) status("");
+}
+
+/* =====================================================================
+   結果表示
+===================================================================== */
+function renderResult() {
+  const r = S.run.result;
+  const cnt = t => r.nodes.filter(n => n.type === t).length;
+  const tchip = t => `<button type="button" class="tchip${S.view.types.has(t) ? " on" : ""}${t === "asset" ? " fixed" : ""}" data-type="${t}" style="--c:${TYPES[t].color}" ${t === "asset" ? 'title="環境資産は常に表示します（グラフの中心）"' : ""}><i></i>${TYPES[t].label}<em>${cnt(t)}</em></button>`;
+  $("result").innerHTML = `
+    ${r.summary ? `<div class="headline">${esc(r.summary)}</div>` : ""}
+    <div class="gtools">
+      <div class="grp">${tchip("asset")}${tchip("experience")}${tchip("emotion")}</div>
+      <div class="grp">つながりの強さ <input type="range" id="minW" min="1" max="5" step="1" value="${S.view.minW}"> <span class="wv" id="minWv">${S.view.minW}</span> 以上</div>
+      <span class="sp"></span>
+      <button type="button" class="btn-s" id="gFit">全体を表示</button>
+      <button type="button" class="btn-s" id="gRelayout">配置をやり直す</button>
+      <button type="button" class="btn-s" id="gJson">JSON を保存</button>
+    </div>
+    <div class="gwrap">
+      <div id="graph"></div>
+      <span class="side-lbl l">← 体験</span><span class="side-lbl c">環境資産</span><span class="side-lbl r">感情 →</span>
+      <span class="ghint">ドラッグで移動 ・ ホイールで拡大縮小 ・ ノード／線をクリックで詳細</span>
+    </div>
+    <div class="detail" id="detail"></div>
+    ${(r.insights || []).length ? `<div class="sec">読み取れること ・ Insights</div><ul class="li">${r.insights.map((t, i) => `<li><i>${i + 1}</i><span>${esc(t)}</span></li>`).join("")}</ul>` : ""}
+    ${(r.caveats || []).length ? `<div class="caveats">${r.caveats.map(c => `<div><b>注意</b>${esc(c)}</div>`).join("")}</div>` : ""}
+    <div class="r-meta" style="margin-top:10px">分析対象 ${Object.keys(S.run.idMap).length} 件${S.run.instructions ? " ・ 追加の指示を反映" : ""} ・ prompt ${esc(S.run.prompt_version || "-")}</div>`;
+  $("result").querySelectorAll(".tchip:not(.fixed)").forEach(b => b.addEventListener("click", () => {
+    const t = b.dataset.type;
+    S.view.types.has(t) ? S.view.types.delete(t) : S.view.types.add(t);
+    b.classList.toggle("on", S.view.types.has(t));
+    drawGraph();
+  }));
+  $("minW").addEventListener("input", () => { S.view.minW = Number($("minW").value); $("minWv").textContent = S.view.minW; drawGraph(); });
+  $("gFit").addEventListener("click", () => G.fit && G.fit(true));
+  $("gRelayout").addEventListener("click", () => { S.pos.clear(); drawGraph(); });
+  $("gJson").addEventListener("click", downloadJson);
+  drawGraph();
+}
+
+/* ---------- グラフ描画（d3-force） ---------- */
+const G = { sim: null, fit: null, zoom: null, svg: null };
+const radius = n => Math.min(n.type === "asset" ? 40 : 26, (n.type === "asset" ? 17 : 9) + Math.sqrt(n.post_ids.length || 1) * 4);
+const strokeW = w => 1 + (w - 1) * 1.9;              // 1 → 1px … 5 → 8.6px
+const strokeO = w => 0.22 + w * 0.13;                // 1 → .35 … 5 → .87
+const nodeById = id => S.run.result.nodes.find(n => n.id === id);
+
+function visibleGraph() {
+  const r = S.run.result, types = S.view.types;
+  const typeOf = id => (nodeById(id) || {}).type;
+  const links = r.edges.filter(e => e.weight >= S.view.minW && types.has(typeOf(e.source)) && types.has(typeOf(e.target)));
+  const linked = new Set(links.flatMap(e => [e.source, e.target]));
+  const nodes = r.nodes.filter(n => types.has(n.type) && (n.type === "asset" || linked.has(n.id)));
+  return { nodes, links };
+}
+
+function drawGraph() {
+  const box = $("graph"); if (!box || !S.run) return;
+  if (typeof d3 === "undefined") { box.innerHTML = '<div class="gempty"><div><b>グラフ描画ライブラリを読み込めませんでした</b>ネットワーク接続（cdn.jsdelivr.net）を確認してください</div></div>'; return; }
+  if (G.sim) G.sim.stop();
+  const W = box.clientWidth || 800, H = box.clientHeight || 600;
+  const R = Math.min(W * 0.3, 330);   // 体験（左）・感情（右）を寄せる距離
+  const { nodes: vn, links: vl } = visibleGraph();
+  box.innerHTML = "";
+  if (!vn.length) { box.innerHTML = '<div class="gempty"><div><b>表示できるノードがありません</b>AI が環境資産を抽出できませんでした。投稿を見直して再分析してください</div></div>'; renderDetail(); return; }
+
+  // 位置キャッシュを引き継ぐ（フィルタ変更で配置が飛ばないように）
+  const nodes = vn.map(n => {
+    const p = S.pos.get(n.id);
+    const bx = n.type === "asset" ? 0 : n.type === "experience" ? -R : R;
+    return { ...n, x: p ? p.x : bx + (Math.random() - .5) * 80, y: p ? p.y : (Math.random() - .5) * H * 0.6 };
+  });
+  const links = vl.map(e => ({ ...e }));
+  const fresh = nodes.some(n => !S.pos.has(n.id));
+
+  const svg = d3.select(box).append("svg").attr("viewBox", [-W / 2, -H / 2, W, H]);
+  G.svg = svg;
+  const root = svg.append("g");
+  G.zoom = d3.zoom().scaleExtent([0.25, 4]).on("zoom", e => root.attr("transform", e.transform));
+  svg.call(G.zoom).on("dblclick.zoom", null);
+  svg.on("click", e => { if (e.target === svg.node()) { S.focus = null; applyFocus(); renderDetail(); } });
+
+  const gLink = root.append("g");
+  const gHit = root.append("g");
+  const gNode = root.append("g");
+
+  const linkSel = gLink.selectAll("line").data(links).join("line")
+    .attr("class", "lk-line")
+    .attr("stroke", d => TYPES[(nodeById(d.target) || {}).type || "experience"].hex)
+    .attr("stroke-width", d => strokeW(d.weight))
+    .attr("stroke-opacity", d => strokeO(d.weight));
+  const hitSel = gHit.selectAll("line").data(links).join("line")
+    .attr("class", "lk-hit").attr("stroke-width", d => Math.max(12, strokeW(d.weight) + 8))
+    .on("mouseenter", (e, d) => hover({ kind: "edge", id: edgeKey(d) }))
+    .on("mouseleave", () => hover(null))
+    .on("click", (e, d) => { e.stopPropagation(); S.focus = { kind: "edge", id: edgeKey(d) }; applyFocus(); renderDetail(); });
+  hitSel.append("title").text(d => `${(nodeById(srcId(d)) || {}).label} — ${(nodeById(tgtId(d)) || {}).label}（強さ ${d.weight}）`);
+
+  const nodeSel = gNode.selectAll("g").data(nodes, d => d.id).join("g")
+    .attr("class", d => "nd " + d.type)
+    .on("mouseenter", (e, d) => hover({ kind: "node", id: d.id }))
+    .on("mouseleave", () => hover(null))
+    .on("click", (e, d) => { e.stopPropagation(); S.focus = { kind: "node", id: d.id }; applyFocus(); renderDetail(); })
+    .call(d3.drag()
+      .on("start", (e, d) => { if (!e.active) G.sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on("end", (e, d) => { if (!e.active) G.sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+  nodeSel.append("circle").attr("r", radius).attr("fill", d => TYPES[d.type].hex);
+  nodeSel.filter(d => d.post_ids.length > 1).append("text").attr("class", "ncnt").attr("text-anchor", "middle").attr("dy", "0.35em").text(d => d.post_ids.length);
+  nodeSel.append("text").attr("class", "lbl")
+    .attr("text-anchor", d => d.type === "asset" ? "middle" : d.type === "experience" ? "end" : "start")
+    .attr("x", d => d.type === "asset" ? 0 : d.type === "experience" ? -(radius(d) + 6) : radius(d) + 6)
+    .attr("y", d => d.type === "asset" ? radius(d) + 15 : 0)
+    .attr("dy", d => d.type === "asset" ? 0 : "0.35em")
+    .text(d => d.label);
+  nodeSel.append("title").text(d => `${TYPES[d.type].label}：${d.label}\n${d.description || ""}\n投稿 ${d.post_ids.length} 件`);
+
+  const xTarget = d => d.type === "asset" ? 0 : d.type === "experience" ? -R : R;
+  G.sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).id(d => d.id).distance(l => 210 - l.weight * 26).strength(l => 0.08 + l.weight * 0.1))
+    .force("charge", d3.forceManyBody().strength(d => d.type === "asset" ? -520 : -220))
+    .force("collide", d3.forceCollide(d => radius(d) + (d.type === "asset" ? 22 : 12)).iterations(2))
+    .force("x", d3.forceX(xTarget).strength(d => d.type === "asset" ? 0.35 : 0.12))
+    .force("y", d3.forceY(0).strength(d => d.type === "asset" ? 0.3 : 0.05))
+    .alpha(fresh ? 1 : 0.3);
+
+  let ticks = 0, fitted = false;
+  G.sim.on("tick", () => {
+    if (fresh && !fitted && ++ticks === 90) G.fit(true);
+    linkSel.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    hitSel.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
+  });
+  G.sim.on("end", () => {
+    nodes.forEach(n => S.pos.set(n.id, { x: n.x, y: n.y }));
+    if (fresh && !fitted) { fitted = true; G.fit(true); }
+  });
+
+  G.fit = animate => {
+    if (!nodes.length) return;
+    const lw = n => n.label.length * 12 + 10;   // ラベル幅の概算（11.5px 程度の全角）
+    const xs = nodes.flatMap(n => [n.x - radius(n) - (n.type === "experience" ? lw(n) : n.type === "asset" ? lw(n) / 2 : 0), n.x + radius(n) + (n.type === "emotion" ? lw(n) : n.type === "asset" ? lw(n) / 2 : 0)]);
+    const ys = nodes.flatMap(n => [n.y - radius(n) - 8, n.y + radius(n) + 24]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const k = Math.max(0.25, Math.min(1.6, 0.94 * Math.min(W / (x1 - x0 || 1), H / (y1 - y0 || 1))));
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const t = d3.zoomIdentity.translate(-k * cx, -k * cy).scale(k);
+    (animate ? svg.transition().duration(500) : svg).call(G.zoom.transform, t);
+  };
+  if (!fresh) G.fit(false);
+
+  // ハイライト用に参照を保持
+  G.linkSel = linkSel; G.nodeSel = nodeSel; G.links = links;
+  applyFocus();
+  renderDetail();
+}
+const srcId = l => (typeof l.source === "object" ? l.source.id : l.source);
+const tgtId = l => (typeof l.target === "object" ? l.target.id : l.target);
+const edgeKey = l => srcId(l) + ">" + tgtId(l);
+
+/** フォーカス（クリック選択 or ホバー）中のノード・エッジと隣接要素を強調 */
+function hover(f) { S.hover = f; applyFocus(); }
+function applyFocus() {
+  if (!G.svg || !G.linkSel) return;
+  const f = S.hover || S.focus;
+  const hiN = new Set(), hiE = new Set();
+  if (f && f.kind === "node") {
+    hiN.add(f.id);
+    G.links.forEach(l => { if (srcId(l) === f.id || tgtId(l) === f.id) { hiE.add(edgeKey(l)); hiN.add(srcId(l)); hiN.add(tgtId(l)); } });
+  } else if (f && f.kind === "edge") {
+    hiE.add(f.id); const [s, t] = f.id.split(">"); hiN.add(s); hiN.add(t);
+  }
+  G.svg.classed("focus", !!f);
+  G.linkSel.classed("hi", l => hiE.has(edgeKey(l))).classed("sel", l => S.focus && S.focus.kind === "edge" && S.focus.id === edgeKey(l));
+  G.nodeSel.classed("hi", d => hiN.has(d.id)).classed("sel", d => S.focus && S.focus.kind === "node" && S.focus.id === d.id);
+  // 分析対象リストで関連投稿をハイライト
+  const posts = new Set(focusPosts(S.focus).map(pid => S.run.idMap[pid]));
+  document.querySelectorAll(".trow").forEach(r => r.classList.toggle("hl", posts.has(r.dataset.id)));
+}
+function focusPosts(f) {
+  if (!f || !S.run) return [];
+  if (f.kind === "node") return (nodeById(f.id) || {}).post_ids || [];
+  const e = S.run.result.edges.find(x => x.source + ">" + x.target === f.id);
+  return e ? e.post_ids : [];
+}
+
+/* ---------- 詳細パネル ---------- */
+const meter = w => `<span class="meter">${[1, 2, 3, 4, 5].map(i => `<u class="${i <= w ? "on" : ""}"></u>`).join("")}<b>${w}</b></span>`;
+function postThumbs(pids) {
+  const list = (pids || []).filter(pid => S.run.idMap[pid]);
+  if (!list.length) return '<div class="ph0txt">該当する投稿はありません</div>';
+  return `<div class="pthumbs">${list.map(pid => { const p = byId(S.run.idMap[pid]); if (!p) return "";
+    return `<button type="button" data-post="${esc(p.id)}" title="${esc((p.n ? p.n + "：" : "") + oneLine(p.s))}"><span>${pid}</span>${p.thumb ? `<img src="${esc(p.thumb)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<div class="ph0"></div>'}</button>`; }).join("")}</div>`;
+}
+function renderDetail() {
+  const el = $("detail"); if (!el) return;
+  const f = S.focus;
+  if (!f) {
+    el.innerHTML = `<div class="ph0txt">ノード（●）や線をクリックすると、根拠となった投稿とつながりの詳細を表示します。<br>
+      線が太いほど、つながりが強い（本文で直接結びついている・複数の投稿で確認できる）ことを表します。円の中の数字はその要素が出てきた投稿の件数です。</div>`;
+    return;
+  }
+  if (f.kind === "node") {
+    const n = nodeById(f.id); if (!n) { S.focus = null; return renderDetail(); }
+    const rel = S.run.result.edges.filter(e => e.source === n.id || e.target === n.id)
+      .map(e => ({ e, o: nodeById(e.source === n.id ? e.target : e.source) })).filter(x => x.o)
+      .sort((a, b) => b.e.weight - a.e.weight || b.e.post_ids.length - a.e.post_ids.length);
+    const group = t => rel.filter(x => x.o.type === t);
+    const nbList = arr => arr.length ? `<div class="nb">${arr.map(x => `<button type="button" data-node="${esc(x.o.id)}" style="--c:${TYPES[x.o.type].color}"><i></i><span>${esc(x.o.label)}</span>${meter(x.e.weight)}</button>`).join("")}</div>` : '<div class="ph0txt">なし</div>';
+    const cols = n.type === "asset"
+      ? `<div><div class="d-sec">つながる体験</div>${nbList(group("experience"))}</div><div><div class="d-sec">つながる感情</div>${nbList(group("emotion"))}</div>`
+      : `<div><div class="d-sec">つながる環境資産</div>${nbList(group("asset"))}</div><div><div class="d-sec">根拠の投稿（${n.post_ids.length} 件）</div>${postThumbs(n.post_ids)}</div>`;
+    el.innerHTML = `
+      <div class="d-head"><span class="tbadge" style="--c:${TYPES[n.type].color}">${TYPES[n.type].label}</span><span class="d-title">${esc(n.label)}</span></div>
+      ${n.description ? `<p class="d-desc">${esc(n.description)}</p>` : ""}
+      <div class="d-cols">${cols}</div>
+      ${n.type === "asset" ? `<div class="d-sec" style="margin-top:14px">根拠の投稿（${n.post_ids.length} 件）</div>${postThumbs(n.post_ids)}` : ""}`;
+  } else {
+    const e = S.run.result.edges.find(x => x.source + ">" + x.target === f.id);
+    if (!e) { S.focus = null; return renderDetail(); }
+    const a = nodeById(e.source), b = nodeById(e.target);
+    el.innerHTML = `
+      <div class="d-head"><span class="tbadge" style="--c:var(--text)">つながり</span>
+        <button type="button" class="link-btn" data-node="${esc(a.id)}" style="font-size:15px;font-weight:900;color:var(--asset);text-decoration:none">${esc(a.label)}</button>
+        <span style="color:var(--dim)">—</span>
+        <button type="button" class="link-btn" data-node="${esc(b.id)}" style="font-size:15px;font-weight:900;color:${TYPES[b.type].color};text-decoration:none">${esc(b.label)}</button>
+        <span style="margin-left:auto">強さ ${meter(e.weight)}</span></div>
+      ${e.reason ? `<div class="reason">${esc(e.reason)}</div>` : ""}
+      <div class="d-sec">根拠の投稿（${e.post_ids.length} 件）</div>${postThumbs(e.post_ids)}`;
+  }
+  el.querySelectorAll("[data-node]").forEach(b => b.addEventListener("click", () => { S.focus = { kind: "node", id: b.dataset.node }; applyFocus(); renderDetail(); }));
+  el.querySelectorAll("[data-post]").forEach(b => b.addEventListener("click", () => openModal(byId(b.dataset.post))));
+}
+
+/* ---------- JSON 保存（グラフ描画用データ） ---------- */
+function downloadJson() {
+  const r = S.run;
+  const out = {
+    generated_at: r.generated_at, model: r.model, prompt_version: r.prompt_version, instructions: r.instructions,
+    posts: Object.entries(r.idMap).map(([pid, aid]) => { const p = byId(aid) || {}; return { post_id: pid, artwork_id: aid, account_name: p.n, post_dated_at: p.t, sentence: p.s, image: p.img }; }),
+    ...r.result
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `drop_graph_${(r.generated_at || new Date().toISOString()).slice(0, 19).replace(/[-:T]/g, "")}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ---------- モーダル ---------- */
+function openModal(p) {
+  if (!p) return;
+  $("modalMedia").innerHTML = p.img ? `<img src="${esc(p.img)}" alt="投稿画像" onerror="this.outerHTML='<span class=&quot;noimg&quot;>画像を読み込めません</span>'">` : '<span class="noimg">画像はありません</span>';
+  $("modalName").textContent = p.n || "投稿者名なし";
+  $("modalBadges").innerHTML = `<span class="badge g">${esc(gLabel(p.g))}</span><span class="badge a">${esc(aLabel(p.a))}</span>`;
+  $("modalMetrics").innerHTML = `<span class="lk">${ICON.like}${fmt(p.like)}</span><span class="pv">${ICON.pv}${fmt(p.pv)}</span>`;
+  $("modalDate").textContent = p.t;
+  $("modalText").textContent = p.s;
+  $("modal").classList.add("show"); $("modal").setAttribute("aria-hidden", "false"); document.body.classList.add("lock"); $("modalX").focus();
+}
+function closeModal() { $("modal").classList.remove("show"); $("modal").setAttribute("aria-hidden", "true"); document.body.classList.remove("lock"); }
+$("modalX").addEventListener("click", closeModal);
+$("modal").addEventListener("click", e => { if (e.target === $("modal")) closeModal(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("modal").classList.contains("show")) closeModal(); });
+
+/* ---------- リサイズ時はグラフを描き直す ---------- */
+let rsT;
+window.addEventListener("resize", () => { clearTimeout(rsT); rsT = setTimeout(() => { if (S.step === 2 && S.run) drawGraph(); }, 200); });
+
+/* ---------- 起動 ---------- */
+loadPrefs();
+initPrompt();
+syncButtons();
+(async () => {
+  try {
+    const json = await loadData();
+    POSTS = normalize(json.records || []);
+    restoreSelection();
+    $("metaUpdated").textContent = POSTS.map(p => p.t).filter(Boolean).sort().pop() || "–";
+    buildFilters(); renderGrid(); syncTabs();
+  } catch (err) {
+    $("postGrid").innerHTML = '<div class="empty"><b>データを読み込めませんでした</b>json/mart_action_drop_engagement.json の配置を確認してください（file:// では fetch できません）</div>';
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>
