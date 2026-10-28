@@ -1,0 +1,681 @@
+/**
+ * DROP. Graph（環境資産 4 レイヤー × 感情 の関係グラフ）— Google Apps Script（Web アプリ）
+ * ------------------------------------------------------------
+ * drop_graph.html から選択した投稿（本文＋画像）を受け取り、Azure OpenAI に渡して
+ * 「環境資産（自然文化・空間・機能・活動の 4 レイヤー）と感情をつないだグラフデータ」を JSON で返す。
+ *
+ * ■ プロンプト
+ *   drop_graph_prompt.md（「## SYSTEM」「## USER」の 2 見出し）を PROMPT_URL から読み込む。
+ *   md を編集すれば出力をチューニングできる（反映は PROMPT_CACHE_SEC 秒後。即時反映は clearPromptCache()）。
+ *
+ * ■ 画像の受け取り方（方式 B）
+ *   画像サーバーは Google のサーバーからのアクセスを拒否するため、ブラウザで縮小した data URL（image_data）を使う。
+ *   image_data が無い投稿だけ GAS から画像 URL を取得する（失敗しても本文のみで続行）。
+ *
+ * ■ アクション（POST / Content-Type: text/plain / body は JSON 文字列）
+ *   { "action":"login", "password":"..." }
+ *       → { ok:true, token:"...", expires_in:秒 }
+ *   { "action":"analyze", "token":"...",
+ *     "posts":[{ id:"P1", name, date, text, like, pv, gender, age, image:"https://...", image_data:"data:..." }, ...],
+ *     "instructions":"追加の指示（任意）", "force":false }
+ *       → { ok:true, cached, elapsed_ms, model, prompt_version, generated_at,
+ *           images_used, images_note, result:{ summary, insights, nodes, edges, caveats } }
+ *   エラー時 → { ok:false, code:"AUTH|LOCKED|LIMIT|BUSY|BAD_REQUEST|CONFIG|AI|SERVER", message:"..." }
+ *
+ * ■ result の形
+ *   nodes: [{ id:"S1", layer:"nature|space|function|activity|emotion", label, description,
+ *             evidence:[{ post_id:"P1", score:1〜5, inferred:false }],
+ *             post_ids:[...], score_max, score_sum, inferred }]        ※ post_ids 以降は GAS が集計
+ *   edges: [{ source, target, weight:1〜5, reason, post_ids:[...] }]  ※ source は時間軸の長いレイヤー側
+ *
+ * ■ スクリプトプロパティ
+ *   必須
+ *     APP_PASSWORD        … 画面で入力させるパスワード
+ *     AZURE_API_KEY_LUNA  … Azure OpenAI の API キー（※リポジトリには絶対に書かない）
+ *     PROMPT_URL          … プロンプト（drop_graph_prompt.md）の raw URL
+ *   任意（括弧内は既定値）
+ *     REASONING_EFFORT (low) / MAX_OUTPUT_TOKENS (10000) / TOKEN_TTL_SEC (21600)
+ *     RESULT_CACHE_SEC (21600) / PROMPT_CACHE_SEC (300) / DAILY_LIMIT (100) / MAX_FAILS (30)
+ *     MAX_POSTS (30) / MAX_TEXT (300) / MAX_INSTR (400)
+ *     ENABLE_IMAGES (true) / IMAGE_URL_PREFIX (https://adpf-poc.com/machiapps/userdata/photos/)
+ *     MAX_IMAGES (10) / MAX_IMAGE_BYTES (1500000) / IMAGE_DETAIL (low)
+ *     SERVER_IMAGE_FETCH (true) / IMAGE_REFERER (https://adpf-poc.com/machiapps/)
+ *
+ * ■ デプロイ
+ *   貼り付け後、エディタで checkSetup() を実行 → デプロイを管理 → 編集 → 新バージョン
+ *   ウェブアプリ設定：次のユーザーとして実行「自分」/ アクセスできるユーザー「全員」
+ */
+
+/* ============================== 設定 ============================== */
+const AZURE_MODEL = {
+  name: 'gpt-6-luna',
+  deployment: 'gpt-6-luna',
+  endpoint: 'https://uhr65-mkgfgxtk-eastus2.openai.azure.com',
+  api_version: '2025-04-01-preview',
+  secret: 'AZURE_API_KEY_LUNA'
+};
+const RAW_GITHUB_BASE = 'https://raw.githubusercontent.com';
+const DEFAULTS = {
+  REASONING_EFFORT: 'low',
+  MAX_OUTPUT_TOKENS: 10000,
+  TOKEN_TTL_SEC: 21600,
+  RESULT_CACHE_SEC: 21600,
+  PROMPT_CACHE_SEC: 300,
+  DAILY_LIMIT: 100,
+  MAX_FAILS: 30,
+  MAX_POSTS: 30,
+  MAX_TEXT: 300,
+  MAX_INSTR: 400,
+  ENABLE_IMAGES: 'true',
+  IMAGE_URL_PREFIX: 'https://adpf-poc.com/machiapps/userdata/photos/',
+  MAX_IMAGES: 10,
+  MAX_IMAGE_BYTES: 1500000,
+  IMAGE_DETAIL: 'low',
+  SERVER_IMAGE_FETCH: 'true',
+  IMAGE_REFERER: 'https://adpf-poc.com/machiapps/'
+};
+const CACHE_MAX_SEC = 21600;
+const FAIL_WINDOW_SEC = 900;
+const KEY = { FAIL: 'graph_auth_fail', PROMPT: 'graph_prompt_v2', TOKEN: 'graph_tok_', RESULT: 'graph_res_v2_', QUOTA: 'graph_count_' };
+/** レイヤー：時間軸の長い順（自然文化 → 空間 → 機能 → 活動）＋感情。エッジの向きもこの順にそろえる */
+const LAYERS = ['nature', 'space', 'function', 'activity', 'emotion'];
+const LIMITS = { nature: 20, space: 30, function: 30, activity: 40, emotion: 30, EDGES: 400, INSIGHTS: 3, CAVEATS: 3, LABEL: 40, DESC: 200, REASON: 160 };
+const IMAGE_TYPES = /^image\/(jpeg|png|webp|gif)$/i;
+const DATA_URL_RE = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
+
+class AppError extends Error {
+  constructor(code, message) { super(message); this.code = code; }
+}
+function prop_(key) {
+  const v = PropertiesService.getScriptProperties().getProperty(key);
+  if (v !== null && v !== undefined) return v;
+  return Object.prototype.hasOwnProperty.call(DEFAULTS, key) ? String(DEFAULTS[key]) : null;
+}
+function numProp_(key) {
+  const raw = prop_(key);
+  const n = Number(raw);
+  return raw === null || raw === '' || !isFinite(n) ? Number(DEFAULTS[key]) : n;
+}
+function boolProp_(key) { return String(prop_(key)).trim().toLowerCase() !== 'false'; }
+function azureUrl_() {
+  return AZURE_MODEL.endpoint.replace(/\/+$/, '') +
+    '/openai/deployments/' + encodeURIComponent(AZURE_MODEL.deployment) +
+    '/chat/completions?api-version=' + encodeURIComponent(AZURE_MODEL.api_version);
+}
+
+/* ============================ エントリ ============================ */
+function doPost(e) {
+  try {
+    let req;
+    try {
+      req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    } catch (err) {
+      throw new AppError('BAD_REQUEST', 'リクエストが JSON ではありません');
+    }
+    switch (req && req.action) {
+      case 'login':   return handleLogin_(req);
+      case 'analyze': return handleAnalyze_(req);
+      default:        throw new AppError('BAD_REQUEST', '不明な action です');
+    }
+  } catch (err) {
+    if (err instanceof AppError) return fail_(err.code, err.message);
+    console.error((err && err.stack) || err);
+    return fail_('SERVER', 'サーバーエラーが発生しました。管理者は GAS の実行ログを確認してください');
+  }
+}
+function doGet() {
+  return json_({ ok: true, service: 'drop-graph-ai', images: boolProp_('ENABLE_IMAGES'), time: new Date().toISOString() });
+}
+
+/* ============================ ログイン ============================ */
+function handleLogin_(req) {
+  const expected = prop_('APP_PASSWORD');
+  if (!expected) throw new AppError('CONFIG', 'APP_PASSWORD が未設定です');
+  const cache = CacheService.getScriptCache();
+  const fails = Number(cache.get(KEY.FAIL) || 0);
+  if (fails >= numProp_('MAX_FAILS')) {
+    throw new AppError('LOCKED', 'パスワードの失敗回数が上限に達しました。15 分ほど待ってから再試行してください');
+  }
+  const pw = String((req && req.password) || '');
+  if (!pw || !safeEqual_(sha256_(pw), sha256_(expected))) {
+    cache.put(KEY.FAIL, String(fails + 1), FAIL_WINDOW_SEC);
+    Utilities.sleep(800);
+    throw new AppError('AUTH', 'パスワードが違います');
+  }
+  cache.remove(KEY.FAIL);
+  const ttl = Math.min(numProp_('TOKEN_TTL_SEC'), CACHE_MAX_SEC);
+  const token = Utilities.getUuid() + Utilities.getUuid().replace(/-/g, '');
+  cache.put(KEY.TOKEN + sha256_(token), '1', ttl);
+  return json_({ ok: true, token: token, expires_in: ttl });
+}
+function checkToken_(token) {
+  if (!token) return false;
+  return CacheService.getScriptCache().get(KEY.TOKEN + sha256_(String(token))) === '1';
+}
+
+/* ============================== 分析 ============================== */
+function handleAnalyze_(req) {
+  const t0 = Date.now();
+  if (!checkToken_(req.token)) {
+    throw new AppError('AUTH', 'ログインの有効期限が切れました。パスワードを再入力してください');
+  }
+  const apiKey = prop_(AZURE_MODEL.secret);
+  if (!apiKey) throw new AppError('CONFIG', 'スクリプトプロパティ ' + AZURE_MODEL.secret + ' が未設定です');
+
+  const posts = sanitizePosts_(req.posts);
+  if (!posts.length) throw new AppError('BAD_REQUEST', '分析対象の投稿がありません');
+  const instructions = sanitizeText_(req.instructions, numProp_('MAX_INSTR'));
+
+  // 画像は投稿オブジェクトから切り離して管理（テキスト JSON には URL・データを入れない）
+  const imageReqs = pickImages_(posts);
+  const prompt = loadPrompt_();
+  const model = AZURE_MODEL.name;
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = KEY.RESULT + sha256_(JSON.stringify([
+    model, prompt.version, posts, instructions,
+    imageReqs.map(x => [x.id, x.url, !!x.dataUrl]), prop_('IMAGE_DETAIL')
+  ]));
+  if (!req.force) {
+    const hit = cache.get(cacheKey);
+    if (hit) {
+      const saved = JSON.parse(hit);
+      saved.cached = true;
+      saved.elapsed_ms = Date.now() - t0;
+      return json_(saved);
+    }
+  }
+
+  if (!adjustDailyQuota_(+1)) throw new AppError('LIMIT', '本日の AI 分析回数の上限に達しました');
+
+  const fromBrowser = imageReqs.filter(x => x.dataUrl);
+  const rest = imageReqs.filter(x => !x.dataUrl);
+  const fetched = rest.length && boolProp_('SERVER_IMAGE_FETCH') ? fetchImages_(rest) : [];
+  const order = imageReqs.map(x => x.id);
+  const images = fromBrowser.concat(fetched).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  const notes = [];
+  const missing = imageReqs.filter(x => !images.some(y => y.id === x.id)).map(x => x.id);
+  if (missing.length) notes.push('画像を取得できなかった投稿: ' + missing.join(', '));
+
+  const postIds = posts.map(p => p.id);
+  const vars = {
+    N_POSTS: String(posts.length),
+    POSTS: JSON.stringify(posts, null, 1),
+    POST_IDS: postIds.join(', '),
+    IMAGE_IDS: images.length ? images.map(x => x.id).join(', ') : '（なし：本文のみで分析してください）',
+    INSTRUCTIONS: instructions || '（なし）'
+  };
+  let userText = fillTemplate_(prompt.user, vars);
+  const tplRaw = prompt.user.replace(/\\/g, '');
+  if (instructions && !/\{\{\s*INSTRUCTIONS\s*\}\}/.test(tplRaw)) userText += '\n\n### 利用者からの追加の指示\n' + instructions;
+
+  const textOnly = [
+    { role: 'system', content: prompt.system },
+    { role: 'user', content: userText }
+  ];
+  const withImages = images.length ? [
+    { role: 'system', content: prompt.system },
+    { role: 'user', content: buildUserContent_(userText, images) }
+  ] : null;
+
+  let data, imagesUsed = images.length;
+  try {
+    if (withImages) {
+      try {
+        data = callAzureOpenAI_(apiKey, withImages);
+      } catch (err) {
+        if (err instanceof AppError && err.code === 'AI' && /image|vision|content.*type|HTTP 400/i.test(err.message)) {
+          console.warn('画像付きリクエストが拒否されたためテキストのみで再送します: ' + err.message);
+          notes.push('AI が画像を受け付けなかったため、本文のみで分析しました');
+          imagesUsed = 0;
+          data = callAzureOpenAI_(apiKey, textOnly);
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      data = callAzureOpenAI_(apiKey, textOnly);
+    }
+  } catch (err) {
+    adjustDailyQuota_(-1);
+    throw err;
+  }
+
+  const payload = {
+    ok: true,
+    cached: false,
+    model: model,
+    prompt_version: prompt.version,
+    generated_at: new Date().toISOString(),
+    images_used: imagesUsed,
+    images_note: notes.join(' / '),
+    result: normalizeGraph_(data, new Set(postIds))
+  };
+  try {
+    cache.put(cacheKey, JSON.stringify(payload), Math.min(numProp_('RESULT_CACHE_SEC'), CACHE_MAX_SEC));
+  } catch (e) { /* 100KB 超などは無視 */ }
+  payload.elapsed_ms = Date.now() - t0;
+  return json_(payload);
+}
+
+/* ---------- 入力整形 ---------- */
+const num_ = v => (isFinite(Number(v)) ? Number(v) : 0);
+const str_ = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+
+function sanitizePosts_(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(p => p && typeof p === 'object')
+    .slice(0, numProp_('MAX_POSTS'))
+    .map((p, i) => {
+      const o = {
+        id: 'P' + (i + 1),
+        name: str_(p.name, 40),
+        date: str_(p.date, 10),
+        text: str_(p.text, numProp_('MAX_TEXT')),
+        like: num_(p.like), pv: num_(p.pv),
+        gender: str_(p.gender, 10), age: str_(p.age, 10)
+      };
+      const img = sanitizeImageUrl_(p.image);
+      if (img) {
+        o.image = img;
+        const data = sanitizeImageData_(p.image_data);
+        if (data) o.image_data = data;
+      }
+      return o;
+    });
+}
+function sanitizeText_(raw, max) {
+  return String(raw == null ? '' : raw)
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, ' ')
+    .replace(/^[ \t]*#+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, max);
+}
+
+/* ---------- 画像 ---------- */
+function sanitizeImageUrl_(v) {
+  const u = String(v == null ? '' : v).trim();
+  if (!u || u.length > 500 || !/^https:\/\/[^\s"'<>\\]+$/.test(u)) return '';
+  if (/\.\.|%2e%2e/i.test(u)) return '';
+  const prefixes = String(prop_('IMAGE_URL_PREFIX') || '').split(',').map(x => x.trim()).filter(Boolean);
+  return prefixes.some(p => u.indexOf(p) === 0) ? u : '';
+}
+function sniffType_(b) {
+  const u = i => (b[i] === undefined ? -1 : b[i] & 0xff);
+  if (u(0) === 0xFF && u(1) === 0xD8 && u(2) === 0xFF) return 'image/jpeg';
+  if (u(0) === 0x89 && u(1) === 0x50 && u(2) === 0x4E && u(3) === 0x47) return 'image/png';
+  if (u(0) === 0x47 && u(1) === 0x49 && u(2) === 0x46) return 'image/gif';
+  if (u(0) === 0x52 && u(1) === 0x49 && u(2) === 0x46 && u(3) === 0x46 && u(8) === 0x57 && u(9) === 0x45) return 'image/webp';
+  return '';
+}
+function sanitizeImageData_(v) {
+  const s = String(v == null ? '' : v);
+  const maxBytes = numProp_('MAX_IMAGE_BYTES');
+  if (!s || s.length > Math.ceil(maxBytes * 4 / 3) + 40) return '';
+  const m = s.match(DATA_URL_RE);
+  if (!m) return '';
+  let bytes;
+  try { bytes = Utilities.base64Decode(m[2]); } catch (e) { return ''; }
+  if (!bytes.length || bytes.length > maxBytes) return '';
+  const type = sniffType_(bytes);
+  if (!/^image\/(jpeg|png|webp)$/.test(type)) return '';
+  return type === m[1] ? s : 'data:' + type + ';base64,' + m[2];
+}
+/** 投稿から画像を取り出し、上限枚数まで選ぶ（上から順）。投稿オブジェクトからは削除 */
+function pickImages_(posts) {
+  const enabled = boolProp_('ENABLE_IMAGES');
+  const max = Math.max(0, numProp_('MAX_IMAGES'));
+  const out = [];
+  posts.forEach(p => {
+    const url = p.image, data = p.image_data;
+    delete p.image; delete p.image_data;
+    if (enabled && url && out.length < max) out.push({ id: p.id, url: url, dataUrl: data || '' });
+  });
+  return out;
+}
+function fetchImages_(reqs) {
+  if (!reqs.length) return [];
+  const maxBytes = numProp_('MAX_IMAGE_BYTES');
+  const referer = String(prop_('IMAGE_REFERER') || '');
+  const opt = url => ({ url: url, muteHttpExceptions: true, followRedirects: true,
+    headers: Object.assign({ Accept: 'image/*' }, referer ? { Referer: referer } : {}) });
+  let responses;
+  try {
+    responses = UrlFetchApp.fetchAll(reqs.map(r => opt(r.url)));
+  } catch (e) {
+    console.warn('image fetchAll failed', e);
+    return [];
+  }
+  const out = [];
+  responses.forEach((res, i) => {
+    try {
+      const code = res.getResponseCode();
+      if (code !== 200) { console.warn('image HTTP ' + code + ': ' + reqs[i].url); return; }
+      const blob = res.getBlob();
+      const bytes = blob.getBytes();
+      if (!bytes.length || bytes.length > maxBytes) return;
+      const header = String(blob.getContentType() || '').split(';')[0].trim();
+      const type = sniffType_(bytes) || (IMAGE_TYPES.test(header) ? header : '');
+      if (!IMAGE_TYPES.test(type)) return;
+      out.push({ id: reqs[i].id, url: reqs[i].url, dataUrl: 'data:' + type + ';base64,' + Utilities.base64Encode(bytes) });
+    } catch (e) {
+      console.warn('image convert failed: ' + reqs[i].url, e);
+    }
+  });
+  return out;
+}
+function buildUserContent_(userText, images) {
+  const detail = ['low', 'high', 'auto'].indexOf(String(prop_('IMAGE_DETAIL'))) >= 0 ? String(prop_('IMAGE_DETAIL')) : 'low';
+  const parts = [{ type: 'text', text: userText }];
+  images.forEach(img => {
+    parts.push({ type: 'text', text: '【' + img.id + ' の画像】' });
+    parts.push({ type: 'image_url', image_url: { url: img.dataUrl, detail: detail } });
+  });
+  return parts;
+}
+
+/* ---------- 出力整形 ---------- */
+/**
+ * AI 出力をグラフ描画用に整える
+ *  - ノード：layer が正しく ID が重複しないものだけ。レイヤーごとに上限
+ *    evidence は有効な投稿 ID・スコア 1〜5 のものだけ（0 点は除外）。evidence が空のノードは削除
+ *    label に「[推定]」が書かれていたら外して inferred 扱いにする
+ *    集計値：post_ids / score_max / score_sum / inferred（すべての根拠が推定なら true）
+ *  - エッジ：異なるレイヤーどうしのみ。向きは「時間軸の長い側 → 短い側（→ 感情）」にそろえる
+ *            同じ組み合わせは 1 本にまとめる（weight は最大値、post_ids は和集合）
+ *  - どのエッジにもつながらない感情ノードは削除
+ */
+function normalizeGraph_(data, validPostIds) {
+  const d = data && typeof data === 'object' ? data : {};
+  const text = (v, n) => str_(typeof v === 'string' ? v : '', n);
+  const pids = v => (Array.isArray(v) ? [...new Set(v.filter(x => typeof x === 'string' && validPostIds.has(x)))] : []);
+  const list = (v, max, n) => (Array.isArray(v) ? v.filter(x => typeof x === 'string' && x.trim()).slice(0, max).map(x => text(x, n)) : []);
+  const INF_TEST = /[\[［]\s*推定\s*[\]］]/;
+  const INF_ALL = /[\[［]\s*推定\s*[\]］]/g;
+
+  const nodes = new Map();
+  const count = {};
+  LAYERS.forEach(l => { count[l] = 0; });
+  (Array.isArray(d.nodes) ? d.nodes : []).forEach(n => {
+    if (!n || typeof n !== 'object') return;
+    const id = text(n.id, 20), layer = n.layer;
+    const rawLabel = typeof n.label === 'string' ? n.label : '';
+    const labelInf = INF_TEST.test(rawLabel);
+    const label = text(rawLabel.replace(INF_ALL, ''), LIMITS.LABEL);
+    if (!id || !label || nodes.has(id) || LAYERS.indexOf(layer) < 0) return;
+    if (count[layer] >= LIMITS[layer]) return;
+    const ev = new Map();
+    (Array.isArray(n.evidence) ? n.evidence : []).forEach(x => {
+      if (!x || typeof x !== 'object' || typeof x.post_id !== 'string' || !validPostIds.has(x.post_id)) return;
+      const score = Math.min(5, Math.max(0, Math.round(num_(x.score))));
+      if (score <= 0) return;
+      const inferred = x.inferred === true || labelInf;
+      const prev = ev.get(x.post_id);
+      if (!prev || score > prev.score) ev.set(x.post_id, { post_id: x.post_id, score: score, inferred: inferred });
+    });
+    if (!ev.size) return;
+    count[layer]++;
+    const evidence = [...ev.values()].sort((a, b) => b.score - a.score);
+    nodes.set(id, {
+      id: id, layer: layer, label: label, description: text(n.description, LIMITS.DESC),
+      evidence: evidence,
+      post_ids: evidence.map(e => e.post_id),
+      score_max: Math.max.apply(null, evidence.map(e => e.score)),
+      score_sum: evidence.reduce((s, e) => s + e.score, 0),
+      inferred: evidence.every(e => e.inferred)
+    });
+  });
+
+  const rank = id => LAYERS.indexOf(nodes.get(id).layer);
+  const edges = new Map();
+  (Array.isArray(d.edges) ? d.edges : []).forEach(e => {
+    if (!e || typeof e !== 'object') return;
+    let s = text(e.source, 20), t = text(e.target, 20);
+    if (!nodes.has(s) || !nodes.has(t) || s === t) return;
+    if (rank(s) === rank(t)) return;                 // 同じレイヤー（感情どうしを含む）はつながない
+    if (rank(s) > rank(t)) { const x = s; s = t; t = x; }
+    const w = Math.min(5, Math.max(1, Math.round(num_(e.weight) || 1)));
+    let posts = pids(e.post_ids);
+    if (!posts.length) {                             // 根拠が無ければ両ノード共通の投稿で補う
+      const tp = new Set(nodes.get(t).post_ids);
+      posts = nodes.get(s).post_ids.filter(p => tp.has(p));
+    }
+    const key = s + '>' + t;
+    const prev = edges.get(key);
+    if (prev) {
+      prev.weight = Math.max(prev.weight, w);
+      prev.post_ids = [...new Set(prev.post_ids.concat(posts))];
+      if (!prev.reason) prev.reason = text(e.reason, LIMITS.REASON);
+    } else if (edges.size < LIMITS.EDGES) {
+      edges.set(key, { source: s, target: t, weight: w, reason: text(e.reason, LIMITS.REASON), post_ids: posts });
+    }
+  });
+
+  const linked = new Set();
+  edges.forEach(e => { linked.add(e.source); linked.add(e.target); });
+  const outNodes = [...nodes.values()].filter(n => n.layer !== 'emotion' || linked.has(n.id));
+
+  return {
+    summary: text(d.summary, 400),
+    insights: list(d.insights, LIMITS.INSIGHTS, 200),
+    nodes: outNodes,
+    edges: [...edges.values()],
+    caveats: list(d.caveats, LIMITS.CAVEATS, 200)
+  };
+}
+
+/* ============================ プロンプト ============================ */
+function loadPrompt_() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get(KEY.PROMPT);
+  if (hit) return JSON.parse(hit);
+  const url = normalizePromptUrl_(prop_('PROMPT_URL'));
+  let res;
+  try {
+    res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+  } catch (e) {
+    console.error('prompt fetch failed: ' + url, e);
+    throw new AppError('CONFIG', 'プロンプトファイルに接続できません。管理者は PROMPT_URL を確認してください');
+  }
+  const code = res.getResponseCode();
+  if (code !== 200) {
+    throw new AppError('CONFIG', 'プロンプトファイルを取得できません（HTTP ' + code + '）。管理者は PROMPT_URL を確認してください');
+  }
+  const prompt = parsePrompt_(res.getContentText('UTF-8'));
+  cache.put(KEY.PROMPT, JSON.stringify(prompt), Math.min(numProp_('PROMPT_CACHE_SEC'), CACHE_MAX_SEC));
+  return prompt;
+}
+function normalizePromptUrl_(url) {
+  const u = String(url || '').trim();
+  if (!u) throw new AppError('CONFIG', 'スクリプトプロパティ PROMPT_URL が未設定です');
+  const m = u.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
+  return m ? [RAW_GITHUB_BASE, m[1], m[2], m[3]].join('/') : u;
+}
+function parsePrompt_(rawText) {
+  if (/^\s*<(!doctype|html)/i.test(rawText)) {
+    throw new AppError('CONFIG', 'プロンプトが HTML で返りました。PROMPT_URL に raw URL を指定してください');
+  }
+  const text = rawText.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/<!--[\s\S]*?-->/g, '');
+  const m = text.match(/^#{2,3}[ \t]*SYSTEM[ \t]*\n([\s\S]*?)^#{2,3}[ \t]*USER[ \t]*\n([\s\S]*)$/im);
+  if (!m) throw new AppError('CONFIG', 'プロンプトファイルに「## SYSTEM」「## USER」の見出しがありません');
+  return { system: m[1].trim(), user: m[2].trim(), version: sha256_(text).slice(0, 10) };
+}
+function fillTemplate_(tpl, vars) {
+  return tpl.replace(/\{\{\s*([\w\\]+?)\s*\}\}/g, (all, k) => {
+    const name = k.replace(/\\/g, '');
+    return Object.prototype.hasOwnProperty.call(vars, name) ? vars[name] : all;
+  });
+}
+function clearPromptCache() {
+  CacheService.getScriptCache().remove(KEY.PROMPT);
+  console.log('プロンプトのキャッシュを削除しました');
+}
+
+/* ============================== Azure OpenAI ============================== */
+const OUTPUT_SCHEMA = (() => {
+  const strArr = { type: 'array', items: { type: 'string' } };
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['summary', 'insights', 'nodes', 'edges', 'caveats'],
+    properties: {
+      summary: { type: 'string' },
+      insights: strArr,
+      nodes: {
+        type: 'array',
+        items: {
+          type: 'object', additionalProperties: false,
+          required: ['id', 'layer', 'label', 'description', 'evidence'],
+          properties: {
+            id: { type: 'string' },
+            layer: { type: 'string', enum: LAYERS },
+            label: { type: 'string' },
+            description: { type: 'string' },
+            evidence: {
+              type: 'array',
+              items: {
+                type: 'object', additionalProperties: false,
+                required: ['post_id', 'score', 'inferred'],
+                properties: {
+                  post_id: { type: 'string' },
+                  score: { type: 'integer', enum: [0, 1, 2, 3, 4, 5] },
+                  inferred: { type: 'boolean' }
+                }
+              }
+            }
+          }
+        }
+      },
+      edges: {
+        type: 'array',
+        items: {
+          type: 'object', additionalProperties: false,
+          required: ['source', 'target', 'weight', 'reason', 'post_ids'],
+          properties: {
+            source: { type: 'string' },
+            target: { type: 'string' },
+            weight: { type: 'integer', enum: [1, 2, 3, 4, 5] },
+            reason: { type: 'string' },
+            post_ids: strArr
+          }
+        }
+      },
+      caveats: strArr
+    }
+  };
+})();
+
+function callAzureOpenAI_(apiKey, messages) {
+  const body = {
+    messages: messages,
+    max_completion_tokens: numProp_('MAX_OUTPUT_TOKENS'),
+    response_format: { type: 'json_schema', json_schema: { name: 'drop_graph', strict: true, schema: OUTPUT_SCHEMA } }
+  };
+  const effort = prop_('REASONING_EFFORT');
+  if (effort) body.reasoning_effort = effort;
+  let r = postAzure_(apiKey, body);
+  if (r.code === 400 && body.reasoning_effort && /reasoning/i.test(r.text)) {
+    console.warn('reasoning_effort=' + body.reasoning_effort + ' が拒否されたため外して再送します: ' + r.text);
+    delete body.reasoning_effort;
+    r = postAzure_(apiKey, body);
+  }
+  let json;
+  try {
+    json = JSON.parse(r.text);
+  } catch (e) {
+    console.error('Azure OpenAI non-JSON', r.code, String(r.text).slice(0, 500));
+    throw new AppError('AI', 'Azure OpenAI の応答を解釈できません (HTTP ' + r.code + ')');
+  }
+  if (r.code !== 200) {
+    console.error('Azure OpenAI error', r.code, String(r.text).slice(0, 1000));
+    const m = String((json.error && json.error.message) || '').slice(0, 200);
+    if (r.code === 401) throw new AppError('AI', 'API キーが無効です（' + AZURE_MODEL.secret + ' を確認してください）');
+    if (r.code === 404) throw new AppError('AI', 'デプロイ「' + AZURE_MODEL.deployment + '」または api-version が見つかりません');
+    if (r.code === 429) throw new AppError('AI', 'Azure OpenAI の利用上限に達しました。少し待ってから再実行してください');
+    throw new AppError('AI', 'Azure OpenAI エラー (HTTP ' + r.code + '): ' + m);
+  }
+  const choice = json.choices && json.choices[0];
+  const msg = choice && choice.message;
+  if (!msg) throw new AppError('AI', 'AI の応答が空です');
+  if (msg.refusal) throw new AppError('AI', 'AI が回答を拒否しました: ' + String(msg.refusal).slice(0, 200));
+  if (choice.finish_reason === 'content_filter') throw new AppError('AI', 'Azure のコンテンツフィルターにより応答が停止されました');
+  if (choice.finish_reason === 'length') throw new AppError('AI', '出力が上限で途切れました。投稿数を減らすか MAX_OUTPUT_TOKENS を増やしてください');
+  if (json.usage) console.log('usage', JSON.stringify(json.usage));
+  try {
+    return JSON.parse(msg.content);
+  } catch (e) {
+    throw new AppError('AI', 'AI の出力が JSON ではありません');
+  }
+}
+function postAzure_(apiKey, body) {
+  let res;
+  try {
+    res = UrlFetchApp.fetch(azureUrl_(), {
+      method: 'post', contentType: 'application/json',
+      headers: { 'api-key': apiKey }, payload: JSON.stringify(body), muteHttpExceptions: true
+    });
+  } catch (e) {
+    console.error('Azure OpenAI fetch failed', e);
+    throw new AppError('AI', 'Azure OpenAI に接続できません。endpoint の設定を確認してください');
+  }
+  return { code: res.getResponseCode(), text: res.getContentText() };
+}
+
+/* ============================== 共通 ============================== */
+function adjustDailyQuota_(delta) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(5000); } catch (e) { throw new AppError('BUSY', 'アクセスが集中しています。少し待ってから再実行してください'); }
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const key = KEY.QUOTA + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd');
+    const n = Number(props.getProperty(key) || 0);
+    if (delta > 0 && n >= numProp_('DAILY_LIMIT')) return false;
+    props.setProperty(key, String(Math.max(0, n + delta)));
+    if (delta > 0 && n === 0) {
+      props.getKeys().filter(k => k.indexOf(KEY.QUOTA) === 0 && k !== key).forEach(k => props.deleteProperty(k));
+    }
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+function sha256_(s) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8)
+    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+}
+function safeEqual_(a, b) {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+function json_(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
+function fail_(code, message) { return json_({ ok: false, code: code, message: message }); }
+
+/* ============================ 動作確認用 ============================ */
+function checkSetup() {
+  ['APP_PASSWORD', AZURE_MODEL.secret, 'PROMPT_URL'].forEach(k => console.log(k + ': ' + (prop_(k) ? '設定済み' : '★未設定')));
+  console.log('MODEL: ' + AZURE_MODEL.name + ' / URL: ' + azureUrl_());
+  console.log('画像解析: ' + (boolProp_('ENABLE_IMAGES') ? 'ON' : 'OFF') + ' / 最大 ' + numProp_('MAX_IMAGES') + ' 枚 / detail=' + prop_('IMAGE_DETAIL'));
+  console.log('PROMPT 取得先: ' + normalizePromptUrl_(prop_('PROMPT_URL')));
+  clearPromptCache();
+  const p = loadPrompt_();
+  console.log('プロンプト version=' + p.version + ' system=' + p.system.length + '字 user=' + p.user.length + '字');
+}
+/** 本文のみ 3 件で Azure まで通して結果を確認（エディタから実行） */
+function testAnalyze() {
+  const login = JSON.parse(handleLogin_({ password: prop_('APP_PASSWORD') }).getContent());
+  const t0 = Date.now();
+  const out = JSON.parse(handleAnalyze_({
+    token: login.token, force: true, instructions: '',
+    posts: [
+      { name: 'ぴっちゃん', date: '2026-10-25', text: '大阪市役所 ツアーに参加！ 最後に屋上 すごい解放感 よく見ると、大阪城！' },
+      { name: 'ぴっちゃん', date: '2026-10-26', text: '今橋ビルディング おしゃれが詰まってるレストラン パスタランチ美味しかった 今度はコース料理を食べてみたい' },
+      { name: 'OMM', date: '2026-10-19', text: '今では珍しい二重螺旋階段と噴水です！シャンデリアは大阪城の近くならではの、豊臣秀吉の「千成ひょうたん」がモチーフとなっています。' }
+    ]
+  }).getContent());
+  console.log('所要 ' + (Date.now() - t0) + 'ms');
+  console.log(JSON.stringify(out, null, 2));
+}

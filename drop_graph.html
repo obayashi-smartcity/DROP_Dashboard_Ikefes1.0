@@ -17,7 +17,7 @@
     --pv:#4a6fa5; --pv-soft:#e6edf7;
     --ok:#2f8a5b; --warn:#9a6b00; --err:#c0392b;
     /* レイヤー色（JS の LAYERS と合わせる） */
-    --nature:#3f8a4e; --space:#3d5f9e; --function:#1f8f8a; --activity:#7a58b0; --emotion:#d0743c;
+    --nature:#1d3f8f; --space:#2f66c6; --function:#5c95e0; --activity:#9cc4f2; --experience:#3a9a5b; --emotion:#e07b2e;
     --font:"Inter","Noto Sans JP",system-ui,sans-serif;
     --font-display:"Inter","Noto Sans JP",sans-serif;
     --gap:18px;
@@ -196,6 +196,7 @@
   .gtools .sp{flex:1}
   .tchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--stroke);background:#fff;padding:5px 10px;font:700 11.5px var(--font);color:var(--muted);cursor:pointer}
   .tchip i{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+  .tchip i.sq{border-radius:2px}
   .tchip i.dia{border-radius:0;transform:rotate(45deg) scale(.85)}
   .tchip.on{border-color:var(--c);color:var(--text)}
   .tchip:not(.on) i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--c)}
@@ -243,6 +244,7 @@
   .nb button{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;text-align:left;border:1px solid var(--stroke-soft);background:#fff;padding:6px 8px;cursor:pointer;font:12px var(--font);color:var(--text)}
   .nb button:hover{border-color:var(--rich)}
   .nb button i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+  .nb button i.sq{border-radius:2px}
   .nb button i.dia{border-radius:0;transform:rotate(45deg) scale(.85)}
   .meter{display:inline-flex;gap:2px;align-items:center}
   .meter u{text-decoration:none;width:9px;height:6px;background:var(--stroke)}
@@ -259,7 +261,7 @@
   .sec{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim);font-weight:800;margin:20px 0 10px}
   .sec::after{content:"";flex:1;height:1px;background:var(--stroke-soft)}
   /* レイヤー別一覧 */
-  .lgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+  .lgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
   .lcol{border:1px solid var(--stroke-soft);border-top:3px solid var(--c);background:#fff;min-width:0}
   .lhead{padding:8px 10px;display:flex;align-items:baseline;gap:6px;border-bottom:1px solid var(--stroke-soft)}
   .lhead b{font-size:13px;font-weight:900;color:var(--c)}
@@ -413,7 +415,7 @@
       <div>
         <div class="eyebrow">Step 02</div>
         <h1>環境資産（4 レイヤー）× 感情 を分析する</h1>
-        <p>選んだ投稿の写真と本文を AI が読み取り、環境資産を「自然文化・空間・機能・活動」の 4 レイヤーに分け、感情とのつながりをグラフにします。</p>
+        <p>選んだ投稿の写真と本文を AI が読み取り、環境資産を「自然文化・空間・機能・活動」の 4 レイヤーに分け、その周りに投稿者の「体験」と「感情」を配置してつながりをグラフにします。</p>
       </div>
       <button type="button" class="btn ghost" id="backBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H6"/><path d="M11 6l-6 6 6 6"/></svg>投稿を選び直す
@@ -528,16 +530,23 @@ const CONFIG = {
   PRESETS: ["空間は建物の部分（階段・屋上など）まで分ける", "感情は 8 個以内にまとめる", "[推定] のタグは控えめにする", "写真から読み取れる行為を重視する"],
   KEYS: { TOKEN: "dropGraphToken", PW: "dropGraphPw", PREFS: "dropGraphPrefs", SEL: "dropGraphSelected" }
 };
-/** レイヤー定義（左から時間軸の長い順。GAS / プロンプトの layer 値と合わせる） */
+/** ノード種別の定義
+ *  環境資産の 4 レイヤー（asset:true）＝ 自然文化 → 空間 → 機能 → 活動（時間軸の長い順。濃い青 → 淡い青）
+ *  体験・感情はレイヤーに属さない周縁の要素（体験＝緑系、感情＝オレンジ系）
+ *  GAS / プロンプトの layer 値と合わせる */
 const LAYERS = {
-  nature:   { label: "自然文化", time: "百年",         hex: "#3f8a4e", desc: "その場所である理由（地形・気候・植生・歴史・伝統文化・食文化）" },
-  space:    { label: "空間",     time: "数十年",       hex: "#3d5f9e", desc: "機能が置かれている物理的な場（建物・公園・広場・街路・まちなみ）" },
-  function: { label: "機能",     time: "数年",         hex: "#1f8f8a", desc: "活動の機会を提供するもの（店舗・設備・用途・仮設の設え）" },
-  activity: { label: "活動",     time: "数日〜数か月", hex: "#7a58b0", desc: "そのとき投稿者がしたこと（イベント・行為）" },
-  emotion:  { label: "感情",     time: "",             hex: "#d0743c", desc: "投稿者自身の感情・気分" }
+  nature:     { label: "自然文化", time: "百年",         hex: "#1d3f8f", asset: true, desc: "その場所である理由（地形・気候・植生・歴史・伝統文化・食文化）" },
+  space:      { label: "空間",     time: "数十年",       hex: "#2f66c6", asset: true, desc: "機能が置かれている物理的な場（建物・公園・広場・街路・まちなみ）" },
+  function:   { label: "機能",     time: "数年",         hex: "#5c95e0", asset: true, desc: "活動の機会を提供するもの（店舗・設備・用途・仮設の設え）" },
+  activity:   { label: "活動",     time: "数日〜数か月", hex: "#9cc4f2", asset: true, desc: "そのとき投稿者がしたこと（イベント・行為）" },
+  experience: { label: "体験",     time: "",             hex: "#3a9a5b", asset: false, desc: "環境資産を通じて投稿者が受け取ったもの（眺め・味・音・光・空気感など）" },
+  emotion:    { label: "感情",     time: "",             hex: "#e07b2e", asset: false, desc: "投稿者自身の感情・気分" }
 };
 const LAYER_KEYS = Object.keys(LAYERS);
-const LINK_ASSET = "#8b86a0";   // 環境資産どうしをつなぐ線の色（感情への線は感情色）
+const ASSET_KEYS = LAYER_KEYS.filter(l => LAYERS[l].asset);
+const kindLabel = l => (LAYERS[l].asset ? "環境資産：" + LAYERS[l].label : LAYERS[l].label);
+const shapeCls = l => (l === "emotion" ? "dia " : l === "experience" ? "sq " : "");
+const LINK_ASSET = "#8b9bb4";   // 環境資産どうしをつなぐ線の色（体験・感情への線はそれぞれの色）
 
 /* ---------- 共通 ---------- */
 const $ = id => document.getElementById(id);
@@ -1037,7 +1046,7 @@ function checkStale() {
    結果表示
 ===================================================================== */
 const nodeById = id => S.run.result.nodes.find(n => n.id === id);
-const dot = (l, cls = "") => `<i class="${l === "emotion" ? "dia " : ""}${cls}" style="--c:${LAYERS[l].hex}"></i>`;
+const dot = (l, cls = "") => `<i class="${shapeCls(l)}${cls}" style="--c:${LAYERS[l].hex}"></i>`;
 
 function renderResult() {
   const r = S.run.result;
@@ -1060,8 +1069,9 @@ function renderResult() {
       <span class="ghint">ドラッグで移動 ・ ホイールで拡大縮小 ・ ノード／線をクリックで詳細</span>
     </div>
     <div class="legend">
-      <span><svg width="22" height="14"><circle cx="7" cy="7" r="6" fill="#8b86a0"/></svg>環境資産（色＝レイヤー）</span>
-      <span><svg width="16" height="16"><path d="M8 1L15 8L8 15L1 8Z" fill="${LAYERS.emotion.hex}"/></svg>感情</span>
+      <span>${ASSET_KEYS.map(l => `<svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="${LAYERS[l].hex}"/></svg>`).join("")}環境資産（中心・左から 自然文化→空間→機能→活動）</span>
+      <span><svg width="14" height="14"><rect x="1" y="1" width="12" height="12" rx="2" fill="${LAYERS.experience.hex}"/></svg>体験（周縁）</span>
+      <span><svg width="16" height="16"><path d="M8 1L15 8L8 15L1 8Z" fill="${LAYERS.emotion.hex}"/></svg>感情（最外周）</span>
       <span><svg width="22" height="14"><circle cx="7" cy="7" r="5.5" fill="#fff" stroke="#8b86a0" stroke-width="2" stroke-dasharray="3 2"/></svg>[推定] のタグ</span>
       <span>大きさ＝スコア合計</span>
       <span><svg width="36" height="12"><line x1="2" y1="6" x2="34" y2="6" stroke="#8b86a0" stroke-width="1.5"/></svg>弱い</span>
@@ -1095,7 +1105,7 @@ function renderLayerGrid() {
     const L = LAYERS[l];
     const list = r.nodes.filter(n => n.layer === l).sort((a, b) => b.score_sum - a.score_sum || b.post_ids.length - a.post_ids.length);
     return `<div class="lcol" style="--c:${L.hex}">
-      <div class="lhead"><b>${L.label}</b>${L.time ? `<span>${L.time}</span>` : ""}<em>${list.length}</em></div>
+      <div class="lhead"><b>${L.asset ? L.label : L.label + "（周縁）"}</b>${L.time ? `<span>${L.time}</span>` : ""}<em>${list.length}</em></div>
       <div class="litems">${list.length ? list.map(n => `<button type="button" class="litem" data-node="${esc(n.id)}" title="${esc(n.description || n.label)}">
         <span class="ll">${n.inferred ? "<i>[推定]</i>" : ""}${esc(n.label)}</span><span class="ls">${n.score_sum}</span></button>`).join("") : '<div class="lnone">該当なし</div>'}</div>
     </div>`;
@@ -1128,7 +1138,7 @@ function visibleGraph() {
   const ok = new Map(r.nodes.filter(n => on.has(n.layer) && (S.view.inferred || !n.inferred)).map(n => [n.id, n]));
   const links = r.edges.filter(e => e.weight >= S.view.minW && ok.has(e.source) && ok.has(e.target));
   const linked = new Set(links.flatMap(e => [e.source, e.target]));
-  const nodes = [...ok.values()].filter(n => n.layer !== "emotion" || linked.has(n.id));
+  const nodes = [...ok.values()].filter(n => LAYERS[n.layer].asset || linked.has(n.id));
   return { nodes, links };
 }
 
@@ -1142,18 +1152,46 @@ function drawGraph(relayout) {
   box.innerHTML = "";
   if (!vn.length) { box.innerHTML = '<div class="gempty"><div><b>表示できるノードがありません</b>表示するレイヤーや条件を見直してください</div></div>'; G.linkSel = null; renderDetail(); return; }
 
-  // 列：表示中のレイヤーだけを左から時間軸の長い順に並べる
-  const cols = LAYER_KEYS.filter(l => S.view.types.has(l));
-  const COL = Math.max(200, Math.min(270, W / cols.length));
-  const colCenter = l => (cols.indexOf(l) - (cols.length - 1) / 2) * COL;
-  const nodeX = l => colCenter(l) - COL * 0.22;          // ラベルを右に出すので列の左寄りに置く
-  const perCol = Math.max(1, ...cols.map(l => vn.filter(n => n.layer === l).length));
-  const bandH = Math.max(H - 30, perCol * 50 + 90);
-  const top = -bandH / 2, bottom = bandH / 2, yMin = top + 64, yMax = bottom - 18;
+  // 同心円レイアウト：中心＝環境資産（4 レイヤーを左→右に 自然文化→活動）、その外周＝体験、最外周＝感情
+  const cols = ASSET_KEYS.filter(l => S.view.types.has(l));
+  const nAsset = vn.filter(n => LAYERS[n.layer].asset).length;
+  const nExp = vn.filter(n => n.layer === "experience").length, nEmo = vn.filter(n => n.layer === "emotion").length;
+  const R0 = nAsset ? Math.max(150, Math.sqrt(nAsset) * 52) : 60;          // 環境資産の円の半径
+  const R1 = Math.max(R0 + 120, (nExp * 46) / (2 * Math.PI));              // 体験の軌道
+  const R2 = Math.max(R1 + 120, (nEmo * 50) / (2 * Math.PI));              // 感情の軌道
+  const B0 = R0 + 20, B1 = (R1 + R2) / 2, B2 = R2 + 70;                    // 背景の境界
+  const ringR = l => (l === "experience" ? R1 : l === "emotion" ? R2 : 0);
+  const colW = cols.length ? (2 * R0 * 0.82) / cols.length : 0;
+  const nodeX = l => (cols.indexOf(l) - (cols.length - 1) / 2) * colW;
+  const clampAsset = d => {                                                // 環境資産は中心の円の中に収める
+    const r = Math.hypot(d.x, d.y), lim = R0 - radius(d);
+    if (r > lim) { d.x *= lim / r; d.y *= lim / r; }
+  };
+  const clampRing = d => {                                                 // 体験・感情は各軌道の近くに保つ
+    const R = ringR(d.layer), r = Math.hypot(d.x, d.y) || 1, band = 26;
+    const t = Math.max(R - band, Math.min(R + band, r));
+    if (t !== r) { d.x *= t / r; d.y *= t / r; }
+  };
 
   const nodes = vn.map(n => {
     const p = prev.get(n.id);
-    return { ...n, x: p ? p.x : nodeX(n.layer) + (Math.random() - .5) * 20, y: p ? p.y : (Math.random() - .5) * (yMax - yMin) * 0.8 };
+    if (p) return { ...n, x: p.x, y: p.y };
+    if (LAYERS[n.layer].asset) return { ...n, x: nodeX(n.layer) + (Math.random() - .5) * 20, y: (Math.random() - .5) * R0 * 1.2 };
+    return { ...n, x: 0, y: 0, _ring: true };
+  });
+  // 体験・感情の初期角度は、つながる要素の方向に合わせる（体験 → 感情の順に決める）
+  const pos0 = new Map(nodes.map(n => [n.id, n]));
+  ["experience", "emotion"].forEach(l => {
+    const list = nodes.filter(n => n.layer === l && n._ring);
+    list.forEach((n, i) => {
+      let sx = 0, sy = 0;
+      vl.forEach(e => {
+        const o = e.source === n.id ? pos0.get(e.target) : e.target === n.id ? pos0.get(e.source) : null;
+        if (o && !o._ring && (o.x || o.y)) { sx += o.x * e.weight; sy += o.y * e.weight; }
+      });
+      const a = (sx || sy) ? Math.atan2(sy, sx) + (Math.random() - .5) * 0.3 : (i / Math.max(1, list.length)) * 2 * Math.PI;
+      n.x = Math.cos(a) * ringR(l); n.y = Math.sin(a) * ringR(l); n._ring = false;
+    });
   });
   const links = vl.map(e => ({ ...e }));
 
@@ -1164,24 +1202,32 @@ function drawGraph(relayout) {
   svg.call(G.zoom).on("dblclick.zoom", null);
   svg.on("click", e => { if (e.target === svg.node() || e.target.classList.contains("band")) { S.focus = null; applyFocus(); renderDetail(); } });
 
-  // レイヤーの帯（背景）と見出し
+  // 背景：外側から 感情 → 体験 → 環境資産 の同心円と見出し
   const gBand = root.append("g");
-  cols.forEach((l, i) => {
-    const L = LAYERS[l], x0 = colCenter(l) - COL / 2;
-    gBand.append("rect").attr("class", "band").attr("x", x0 + 4).attr("y", top).attr("width", COL - 8).attr("height", bandH)
-      .attr("fill", L.hex).attr("fill-opacity", l === "emotion" ? 0.06 : 0.05).attr("rx", 6);
-    gBand.append("rect").attr("x", x0 + 4).attr("y", top).attr("width", COL - 8).attr("height", 4).attr("fill", L.hex);
-    gBand.append("text").attr("class", "band-h").attr("x", colCenter(l)).attr("y", top + 28).attr("text-anchor", "middle").attr("fill", L.hex)
-      .text(l === "emotion" ? L.label : `環境資産：${L.label}`);
-    gBand.append("text").attr("class", "band-t").attr("x", colCenter(l)).attr("y", top + 45).attr("text-anchor", "middle")
-      .text(L.time ? `時間軸：${L.time}` : "投稿者の感情");
-  });
+  const ring = (r, fill, stroke) => gBand.append("circle").attr("class", "band").attr("r", r).attr("fill", fill).attr("stroke", stroke).attr("stroke-width", 1.5);
+  const ringLabel = (y, color, main, sub) => {
+    gBand.append("text").attr("class", "band-h").attr("x", 0).attr("y", y).attr("text-anchor", "middle").attr("fill", color).text(main);
+    if (sub) gBand.append("text").attr("class", "band-t").attr("x", 0).attr("y", y + 15).attr("text-anchor", "middle").text(sub);
+  };
+  if (S.view.types.has("emotion")) ring(B2, "#fdf2e8", "#f3c9a6");
+  if (S.view.types.has("experience")) ring(B1, "#ebf6ee", "#b5dcc1");
+  ring(B0, "#eef4fc", "#c3d6f0");
+  if (S.view.types.has("emotion")) ringLabel(-B2 + 26, LAYERS.emotion.hex, "感情", "投稿者の感情・気分");
+  if (S.view.types.has("experience")) ringLabel(-B1 + 26, LAYERS.experience.hex, "体験", "環境資産を通じて受け取ったもの");
+  if (cols.length) {
+    ringLabel(-B0 - 10, LAYERS.space.hex, "環境資産（4 レイヤー）", "");
+    cols.forEach(l => {
+      gBand.append("text").attr("class", "band-t").attr("x", nodeX(l)).attr("y", R0 - 4).attr("text-anchor", "middle")
+        .attr("fill", LAYERS[l].hex).style("fill", LAYERS[l].hex).style("font-weight", 900).text(LAYERS[l].label);
+      gBand.append("text").attr("class", "band-t").attr("x", nodeX(l)).attr("y", R0 + 10).attr("text-anchor", "middle").text(LAYERS[l].time);
+    });
+  }
 
   const gLink = root.append("g"), gHit = root.append("g"), gNode = root.append("g");
   const isInfLink = l => (nodeById(srcId(l)) || {}).inferred || (nodeById(tgtId(l)) || {}).inferred;
   const linkSel = gLink.selectAll("line").data(links).join("line")
     .attr("class", "lk-line")
-    .attr("stroke", d => (nodeById(d.target) || {}).layer === "emotion" ? LAYERS.emotion.hex : LINK_ASSET)
+    .attr("stroke", d => { const t = (nodeById(d.target) || {}).layer; return t === "emotion" ? LAYERS.emotion.hex : t === "experience" ? LAYERS.experience.hex : LINK_ASSET; })
     .attr("stroke-width", d => strokeW(d.weight))
     .attr("stroke-opacity", d => strokeO(d.weight))
     .attr("stroke-dasharray", d => isInfLink(d) ? "6 4" : null);
@@ -1199,34 +1245,37 @@ function drawGraph(relayout) {
     .on("click", (e, d) => { e.stopPropagation(); S.focus = { kind: "node", id: d.id }; applyFocus(); renderDetail(); })
     .call(d3.drag()
       .on("start", (e, d) => { if (!e.active) G.sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
-      .on("drag", (e, d) => { d.fx = e.x; d.fy = Math.max(yMin, Math.min(yMax, e.y)); })
+      .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
       .on("end", (e, d) => { if (!e.active) G.sim.alphaTarget(0); d.fx = null; d.fy = null; }));
-  // 形：環境資産＝円、感情＝ひし形。推定＝白抜き＋破線
+  // 形：環境資産＝円、体験＝角丸の四角、感情＝ひし形。推定＝白抜き＋破線
   const shapeAttrs = sel => sel
     .attr("class", "shape")
     .attr("fill", d => d.inferred ? "#fff" : LAYERS[d.layer].hex)
     .attr("stroke", d => d.inferred ? LAYERS[d.layer].hex : "#fff")
     .attr("stroke-width", d => d.inferred ? 2.2 : 2.5)
     .attr("stroke-dasharray", d => d.inferred ? "4 3" : null);
-  shapeAttrs(nodeSel.filter(d => d.layer !== "emotion").append("circle").attr("r", radius));
+  shapeAttrs(nodeSel.filter(d => LAYERS[d.layer].asset).append("circle").attr("r", radius));
+  shapeAttrs(nodeSel.filter(d => d.layer === "experience").append("rect").attr("rx", 3)
+    .attr("x", d => -radius(d) * 0.9).attr("y", d => -radius(d) * 0.9).attr("width", d => radius(d) * 1.8).attr("height", d => radius(d) * 1.8));
   shapeAttrs(nodeSel.filter(d => d.layer === "emotion").append("path").attr("d", d => { const r = radius(d) * 1.2; return `M0,${-r}L${r},0L0,${r}L${-r},0Z`; }));
   nodeSel.filter(d => d.post_ids.length > 1).append("text").attr("class", "ncnt").attr("text-anchor", "middle").attr("dy", "0.35em")
-    .attr("fill", d => d.inferred ? LAYERS[d.layer].hex : "#fff").text(d => d.post_ids.length);
+    .attr("fill", d => d.inferred ? LAYERS[d.layer].hex : d.layer === "activity" ? "#1d3f8f" : "#fff").text(d => d.post_ids.length);
   const lbl = nodeSel.append("text").attr("x", d => radius(d) * (d.layer === "emotion" ? 1.2 : 1) + 6).attr("dy", "0.35em");
   lbl.filter(d => d.inferred).append("tspan").attr("class", "inf").text("[推定] ");
   lbl.append("tspan").text(d => clip(d.label, d.inferred ? 11 : 14));
-  nodeSel.append("title").text(d => `${LAYERS[d.layer].label}${d.inferred ? "［推定］" : ""}：${d.label}\n${d.description || ""}\n投稿 ${d.post_ids.length} 件 ・ スコア合計 ${d.score_sum}`);
+  nodeSel.append("title").text(d => `${kindLabel(d.layer)}${d.inferred ? "［推定］" : ""}：${d.label}\n${d.description || ""}\n投稿 ${d.post_ids.length} 件 ・ スコア合計 ${d.score_sum}`);
 
   G.sim = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(links).id(d => d.id).distance(COL).strength(l => 0.02 + l.weight * 0.025))
-    .force("charge", d3.forceManyBody().strength(-90).distanceMax(220))
+    .force("link", d3.forceLink(links).id(d => d.id).distance(110).strength(l => 0.01 + l.weight * 0.012))
+    .force("charge", d3.forceManyBody().strength(-80).distanceMax(200))
     .force("collide", d3.forceCollide(d => radius(d) + 10).iterations(2))
-    .force("x", d3.forceX(d => nodeX(d.layer)).strength(0.9))
-    .force("y", d3.forceY(0).strength(0.03))
+    .force("x", d3.forceX(d => LAYERS[d.layer].asset ? nodeX(d.layer) : 0).strength(d => LAYERS[d.layer].asset ? 0.6 : 0))
+    .force("y", d3.forceY(0).strength(d => LAYERS[d.layer].asset ? 0.04 : 0))
+    .force("ring", d3.forceRadial(d => ringR(d.layer), 0, 0).strength(d => LAYERS[d.layer].asset ? 0 : 0.8))
     .alpha(prev.size ? 0.4 : 1);
 
   G.sim.on("tick", () => {
-    nodes.forEach(d => { d.y = Math.max(yMin, Math.min(yMax, d.y)); });
+    nodes.forEach(d => { if (d.fx != null) return; LAYERS[d.layer].asset ? clampAsset(d) : clampRing(d); });
     linkSel.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
     hitSel.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
     nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
@@ -1236,10 +1285,9 @@ function drawGraph(relayout) {
 
   // 帯全体が収まるように表示（列レイアウトなので配置の完了を待たずに決まる）
   G.fit = animate => {
-    const kW = 0.97 * W / (cols.length * COL), kH = 0.97 * H / bandH;
-    const k = Math.max(0.2, Math.min(1.4, kW, Math.max(kH, 0.55)));   // ノードが多いときは縦をはみ出させて上端に合わせる
-    const t = k * bandH > H ? d3.zoomIdentity.translate(0, -H / 2 + 6 - top * k).scale(k) : d3.zoomIdentity.scale(k);
-    (animate ? svg.transition().duration(450) : svg).call(G.zoom.transform, t);
+    const ext = S.view.types.has("emotion") ? B2 : S.view.types.has("experience") ? B1 : B0;
+    const k = Math.max(0.2, Math.min(1.4, (0.97 * Math.min(W, H)) / (2 * ext + 60)));
+    (animate ? svg.transition().duration(450) : svg).call(G.zoom.transform, d3.zoomIdentity.scale(k));
   };
   G.fit(false);
 
@@ -1291,7 +1339,7 @@ function renderDetail() {
   const f = S.focus;
   if (!f) {
     el.innerHTML = `<div class="ph0txt">ノードや線をクリックすると、根拠となった投稿（スコア付き）とつながりの詳細を表示します。<br>
-      列は環境資産のレイヤー（左ほど時間軸が長い）と感情です。線が太いほどつながりが強く、ノードの大きさはスコアの合計、数字は根拠となった投稿の件数です。</div>`;
+      中心が環境資産の 4 レイヤー（左から 自然文化→空間→機能→活動、右ほど淡い青）、その外周が体験（緑）、最外周が感情（オレンジ）です。線が太いほどつながりが強く、ノードの大きさはスコアの合計、数字は根拠となった投稿の件数です。</div>`;
     return;
   }
   if (f.kind === "node") {
@@ -1305,7 +1353,7 @@ function renderDetail() {
       g.arr.map(x => `<button type="button" data-node="${esc(x.o.id)}" style="--c:${LAYERS[x.o.layer].hex}">${dot(x.o.layer)}<span>${x.o.inferred ? '<b style="color:var(--warn);font-size:10px">[推定] </b>' : ""}${esc(x.o.label)}</span>${meter(x.e.weight)}</button>`).join("")).join("")}</div>`
       : '<div class="ph0txt">つながる要素はありません</div>';
     el.innerHTML = `
-      <div class="d-head"><span class="tbadge" style="--c:${L.hex}">${n.layer === "emotion" ? "感情" : "環境資産：" + L.label}</span>${L.time ? `<span class="tax">時間軸：${L.time}</span>` : ""}
+      <div class="d-head"><span class="tbadge" style="--c:${L.hex}">${kindLabel(n.layer)}</span>${L.time ? `<span class="tax">時間軸：${L.time}</span>` : ""}
         <span class="d-title">${esc(n.label)}</span>${n.inferred ? '<span class="inf-b">[推定]</span>' : ""}
         <span style="margin-left:auto;font-size:11.5px;color:var(--muted)">スコア合計 <b style="color:var(--text)">${n.score_sum}</b> ・ 最高 ${n.score_max} 点</span></div>
       ${n.description ? `<p class="d-desc">${esc(n.description)}</p>` : ""}
