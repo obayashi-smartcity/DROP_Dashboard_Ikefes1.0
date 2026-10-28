@@ -546,7 +546,8 @@ const CONFIG = {
 /** ノードの種別（描画用）
  *  ノードは 3 カテゴリー：環境資産（asset）・体験（experience）・感情（emotion）
  *  レイヤーは環境資産だけの分類（自然文化 → 空間 → 機能 → 活動：時間軸の長い順。濃い青 → 淡い青）
- *  体験・感情はレイヤーに属さない。kind は「環境資産ならレイヤー、それ以外はカテゴリー」 */
+ *  体験・感情はレイヤーに属さない。kind は「環境資産ならレイヤー、それ以外はカテゴリー」
+ *  グラフはこの並び順で中心から外側へ放射状に配置する */
 const KINDS = {
   nature:     { label: "自然文化", cat: "asset",      time: "百年",         hex: "#1d3f8f", desc: "その場所である理由（地形・気候・植生・歴史・伝統文化・食文化）" },
   space:      { label: "空間",     cat: "asset",      time: "数十年",       hex: "#2f66c6", desc: "物理的な場（建物・公園・広場・街路・まちなみ）" },
@@ -1079,7 +1080,7 @@ function renderResult() {
   $("result").innerHTML = `
     ${r.summary ? `<div class="headline">${esc(r.summary)}</div>` : ""}
     <div class="gtools">
-      <div class="grp"><span class="gl">環境資産</span>${ASSET_KEYS.map(chip).join("")}<span class="vsep"></span>${chip("experience")}${chip("emotion")}</div>
+      <div class="grp"><span class="gl">中心</span>${ASSET_KEYS.map(chip).join("")}<span class="vsep"></span>${chip("experience")}${chip("emotion")}<span class="gl">外側</span></div>
       <span class="sp"></span>
       <div class="grp">強さ<div class="wseg" id="minW">${[1, 2, 3, 4, 5].map(w => `<button type="button" data-w="${w}" class="${w === S.view.minW ? "on" : ""}">${w === 1 ? "すべて" : w + "+"}</button>`).join("")}</div></div>
     </div>
@@ -1149,7 +1150,7 @@ function focusNode(id, scroll) {
 
 /* ---------- グラフ描画（d3-force / レイヤーごとの列レイアウト） ---------- */
 const G = { sim: null, fit: null, zoom: null, svg: null };
-const radius = n => Math.min(32, 10 + Math.sqrt(n.score_sum || 1) * 3.6);
+const radius = n => Math.min(30, 10 + Math.sqrt(n.score_sum || 1) * 3.4);
 const strokeW = w => 1 + (w - 1) * 1.8;              // 1 → 1px … 5 → 8.2px
 const strokeO = w => 0.25 + w * 0.12;                // 1 → .37 … 5 → .85
 const srcId = l => (typeof l.source === "object" ? l.source.id : l.source);
@@ -1175,33 +1176,48 @@ function drawGraph(relayout) {
   box.innerHTML = "";
   if (!vn.length) { box.innerHTML = '<div class="gempty"><div><b>表示できるノードがありません</b>表示する種別や強さを見直してください</div></div>'; G.linkSel = null; renderDetail(); return; }
 
-  // ゆるやかな同心配置：環境資産は中央（左→右に 自然文化→活動）、体験はその外側、感情はさらに外側に寄せる
-  const cols = ASSET_KEYS.filter(l => S.view.types.has(l));
-  const nAsset = vn.filter(n => isAssetKind(n.kind)).length;
-  const R0 = Math.max(130, Math.sqrt(nAsset || 1) * 50);
-  const ringR = k => (k === "experience" ? R0 * 1.7 : k === "emotion" ? R0 * 2.4 : 0);
-  const colW = cols.length ? (1.7 * R0) / cols.length : 0;
-  const nodeX = k => (cols.indexOf(k) - (cols.length - 1) / 2) * colW;
-  const isAsset = d => isAssetKind(d.kind);
-
-  const nodes = vn.map(n => {
-    const p = prev.get(n.id);
-    if (p) return { ...n, x: p.x, y: p.y };
-    if (isAssetKind(n.kind)) return { ...n, x: nodeX(n.kind) + (Math.random() - .5) * 20, y: (Math.random() - .5) * R0 };
-    return { ...n, x: 0, y: 0, _ring: true };
+  /* ---- 放射状レイアウト ----
+     中心から 自然文化 → 空間 → 機能 → 活動 → 体験 → 感情 の順に同心円（リング）上へ並べる。
+     リングの半径はノード数に応じて広げ、各ノードの角度はつながる内側のノードの方向にそろえる（線の交差を減らす） */
+  const order = KIND_KEYS.filter(k => vn.some(n => n.kind === k));
+  const GAP = 105, SPACING = 86;                      // リング間隔 / リング上のノード間隔の目安
+  const ringR = {};
+  let rr = 0;
+  order.forEach((k, i) => {
+    const c = vn.filter(n => n.kind === k).length;
+    const need = (c * SPACING) / (2 * Math.PI);
+    rr = i === 0 ? (c === 1 ? 0 : Math.max(60, need)) : Math.max(rr + GAP, need);
+    ringR[k] = rr;
   });
-  // 体験・感情の初期位置は、つながる要素の方向に置く（体験 → 感情の順）
-  const pos0 = new Map(nodes.map(n => [n.id, n]));
-  ["experience", "emotion"].forEach(k => {
-    const list = nodes.filter(n => n.kind === k && n._ring);
+  const RR = k => ringR[k] || 0;
+  const TAU = 2 * Math.PI;
+
+  const nodes = vn.map(n => { const p = prev.get(n.id); return p ? { ...n, x: p.x, y: p.y, _fixed: true } : { ...n, x: 0, y: 0 }; });
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const placed = new Set(nodes.filter(n => n._fixed).map(n => n.id));
+  order.forEach((k, ki) => {
+    const list = nodes.filter(n => n.kind === k && !n._fixed);
+    if (!list.length) return;
+    // 内側（配置済み）のつながる相手の方向を求める
     list.forEach((n, i) => {
       let sx = 0, sy = 0;
       vl.forEach(e => {
-        const o = e.source === n.id ? pos0.get(e.target) : e.target === n.id ? pos0.get(e.source) : null;
-        if (o && !o._ring && (o.x || o.y)) { sx += o.x * e.weight; sy += o.y * e.weight; }
+        const oid = e.source === n.id ? e.target : e.target === n.id ? e.source : null;
+        const o = oid && placed.has(oid) ? byId.get(oid) : null;
+        if (o && (o.x || o.y)) { sx += o.x * e.weight; sy += o.y * e.weight; }
       });
-      const a = (sx || sy) ? Math.atan2(sy, sx) + (Math.random() - .5) * 0.4 : (i / Math.max(1, list.length)) * 2 * Math.PI;
-      n.x = Math.cos(a) * ringR(k); n.y = Math.sin(a) * ringR(k); n._ring = false;
+      n._a = (sx || sy) ? Math.atan2(sy, sx) : (i / list.length) * TAU + ki * 0.5;
+    });
+    // 希望角度の順に並べ、等間隔に割り付ける（順序を保ったまま重なりを防ぐ）
+    list.sort((a, b) => a._a - b._a);
+    const step = TAU / list.length;
+    let cs = 0, cc = 0;
+    list.forEach((n, i) => { cs += Math.sin(n._a - i * step); cc += Math.cos(n._a - i * step); });
+    const base = Math.atan2(cs, cc);
+    list.forEach((n, i) => {
+      const a = list.length === 1 ? n._a : base + i * step;
+      n.x = Math.cos(a) * RR(k); n.y = Math.sin(a) * RR(k);
+      placed.add(n.id);
     });
   });
   const links = vl.map(e => ({ ...e }));
@@ -1213,13 +1229,16 @@ function drawGraph(relayout) {
   svg.call(G.zoom).on("dblclick.zoom", null);
   svg.on("click", e => { if (e.target === svg.node()) { S.focus = null; applyFocus(); renderDetail(); } });
 
+  // 放射状の構造が読み取れるよう、各リングを細い破線でうっすら示す（色は種別の色）
+  const gGuide = root.append("g").attr("pointer-events", "none");
+  order.forEach(k => { if (RR(k) > 0) gGuide.append("circle").attr("r", RR(k)).attr("fill", "none")
+    .attr("stroke", KINDS[k].hex).attr("stroke-opacity", 0.28).attr("stroke-width", 1.2).attr("stroke-dasharray", "3 5"); });
+
   const gLink = root.append("g"), gHit = root.append("g"), gNode = root.append("g");
   const linkColor = d => { const t = (nodeById(tgtId(d)) || {}).kind; return t === "emotion" ? KINDS.emotion.hex : t === "experience" ? KINDS.experience.hex : LINK_ASSET; };
   const linkSel = gLink.selectAll("line").data(links).join("line")
-    .attr("class", "lk-line")
-    .attr("stroke", linkColor)
-    .attr("stroke-width", d => strokeW(d.weight))
-    .attr("stroke-opacity", d => strokeO(d.weight));
+    .attr("class", "lk-line").attr("stroke", linkColor)
+    .attr("stroke-width", d => strokeW(d.weight)).attr("stroke-opacity", d => strokeO(d.weight));
   const hitSel = gHit.selectAll("line").data(links).join("line")
     .attr("class", "lk-hit").attr("stroke-width", d => Math.max(12, strokeW(d.weight) + 8))
     .on("mouseenter", (e, d) => hover({ kind: "edge", id: edgeKey(d) }))
@@ -1238,40 +1257,51 @@ function drawGraph(relayout) {
       .on("end", (e, d) => { if (!e.active) G.sim.alphaTarget(0); d.fx = null; d.fy = null; }));
   // 形：環境資産＝円、体験＝角丸の四角、感情＝ひし形
   const shapeAttrs = sel => sel.attr("class", "shape").attr("fill", d => KINDS[d.kind].hex).attr("stroke", "#fff").attr("stroke-width", 2.5);
-  shapeAttrs(nodeSel.filter(d => isAsset(d)).append("circle").attr("r", radius));
+  shapeAttrs(nodeSel.filter(d => isAssetKind(d.kind)).append("circle").attr("r", radius));
   shapeAttrs(nodeSel.filter(d => d.kind === "experience").append("rect").attr("rx", 3)
     .attr("x", d => -radius(d) * 0.9).attr("y", d => -radius(d) * 0.9).attr("width", d => radius(d) * 1.8).attr("height", d => radius(d) * 1.8));
   shapeAttrs(nodeSel.filter(d => d.kind === "emotion").append("path").attr("d", d => { const r = radius(d) * 1.2; return `M0,${-r}L${r},0L0,${r}L${-r},0Z`; }));
   nodeSel.filter(d => d.post_ids.length > 1).append("text").attr("class", "ncnt").attr("text-anchor", "middle").attr("dy", "0.35em")
     .attr("fill", d => d.kind === "activity" ? "#1d3f8f" : "#fff").text(d => d.post_ids.length);
-  nodeSel.append("text").attr("x", d => radius(d) * (d.kind === "emotion" ? 1.2 : 1) + 6).attr("dy", "0.35em").text(d => clip(d.label, 14));
+  // ラベルは中心から外向きに置く（右半分は右側、左半分は左側）
+  const lbl = nodeSel.append("text").attr("dy", "0.35em").text(d => clip(d.label, 14));
   nodeSel.append("title").text(d => `${kindLabel(d.kind)}：${d.label}\n${d.description || ""}\n投稿 ${d.post_ids.length} 件 ・ スコア合計 ${d.score_sum}`);
 
+  // 物理演算：各ノードを自分のリングに強く拘束し、リング上での重なりだけを調整する
+  const BAND = 14;
+  const keepOnRing = d => {
+    const R = RR(d.kind), r = Math.hypot(d.x, d.y);
+    if (R === 0) { if (r > BAND) { d.x *= BAND / r; d.y *= BAND / r; } return; }
+    const t = Math.max(R - BAND, Math.min(R + BAND, r || R));
+    if (r === 0) { d.x = R; d.y = 0; } else if (t !== r) { d.x *= t / r; d.y *= t / r; }
+  };
   G.sim = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(links).id(d => d.id).distance(90).strength(l => 0.03 + l.weight * 0.02))
-    .force("charge", d3.forceManyBody().strength(-160).distanceMax(320))
-    .force("collide", d3.forceCollide(d => radius(d) + 14).iterations(2))
-    .force("x", d3.forceX(d => isAsset(d) ? nodeX(d.kind) : 0).strength(d => isAsset(d) ? 0.12 : 0))
-    .force("y", d3.forceY(0).strength(d => isAsset(d) ? 0.08 : 0))
-    .force("ring", d3.forceRadial(d => ringR(d.kind), 0, 0).strength(d => isAsset(d) ? 0 : 0.18))
+    .force("link", d3.forceLink(links).id(d => d.id).distance(GAP).strength(0.002))     // 角度の初期配置を保つため、ごく弱く
+    .force("charge", d3.forceManyBody().strength(-140).distanceMax(150))                // 同じリング上の近いノードどうしを離す
+    .force("collide", d3.forceCollide(d => radius(d) + 22).iterations(3))
+    .force("ring", d3.forceRadial(d => RR(d.kind), 0, 0).strength(0.9))
     .stop();
-  if (!prev.size) for (let i = 0; i < 260; i++) G.sim.tick();      // 配置を先に落ち着かせてから表示
+  const tick = () => nodes.forEach(d => { if (d.fx == null) keepOnRing(d); });
+  if (!prev.size) for (let i = 0; i < 200; i++) { G.sim.tick(); tick(); }
   const render = () => {
+    tick();
     linkSel.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
     hitSel.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
     nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
+    lbl.attr("text-anchor", d => (d.x < -1 ? "end" : "start"))
+      .attr("x", d => { const o = radius(d) * (d.kind === "emotion" ? 1.2 : 1) + 6; return d.x < -1 ? -o : o; });
   };
   render();
   G.sim.on("tick", render).alpha(prev.size ? 0.3 : 0.05).restart();
   G.pos = new Map();
   G.sim.on("end", () => nodes.forEach(n => G.pos.set(n.id, { x: n.x, y: n.y })));
 
-  // ノード（ラベル込み）全体が枠いっぱいに収まるように表示
+  // 全体（ラベル込み）が枠いっぱいに収まるように表示
   G.fit = animate => {
-    const xs = nodes.map(d => d.x), ys = nodes.map(d => d.y);
-    const x0 = Math.min(...xs) - 40, x1 = Math.max(...xs) + 130, y0 = Math.min(...ys) - 40, y1 = Math.max(...ys) + 40;
-    const k = Math.max(0.2, Math.min(1.8, Math.min(W / (x1 - x0), H / (y1 - y0)) * 0.96));
-    const t = d3.zoomIdentity.scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+    // 中心（自然文化）を画面の中央に置いたまま、いちばん外側のノードとラベルが収まる倍率にする
+    const ex = Math.max(...nodes.map(d => Math.abs(d.x))) + 150, ey = Math.max(...nodes.map(d => Math.abs(d.y))) + 40;
+    const k = Math.max(0.2, Math.min(1.8, Math.min(W / (2 * ex), H / (2 * ey)) * 0.98));
+    const t = d3.zoomIdentity.scale(k);
     (animate ? svg.transition().duration(450) : svg).call(G.zoom.transform, t);
   };
   G.fit(false);
