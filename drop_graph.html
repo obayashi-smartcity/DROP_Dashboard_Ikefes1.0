@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DROP. Graph — 環境資産 4 レイヤー × 感情</title>
+<title>DROP. Graph — 環境資産 × 体験 × 感情</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
@@ -16,7 +16,7 @@
     --rich:#7a58b0; --rich-2:#a98cd0; --rich-soft:#efe9f7;
     --pv:#4a6fa5; --pv-soft:#e6edf7;
     --ok:#2f8a5b; --warn:#9a6b00; --err:#c0392b;
-    /* レイヤー色（JS の LAYERS と合わせる） */
+    /* 種別の色（JS の KINDS と合わせる）：環境資産は青系（自然文化→活動の順に淡く）、体験＝緑、感情＝オレンジ */
     --nature:#1d3f8f; --space:#2f66c6; --function:#5c95e0; --activity:#9cc4f2; --experience:#3a9a5b; --emotion:#e07b2e;
     --font:"Inter","Noto Sans JP",system-ui,sans-serif;
     --font-display:"Inter","Noto Sans JP",sans-serif;
@@ -193,6 +193,8 @@
   /* ---------- Result ---------- */
   .headline{font-size:14.5px;font-weight:700;line-height:1.8;padding:4px 0 16px;color:var(--text)}
   .gtools{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:0 0 12px;font-size:12px;color:var(--muted)}
+  .gtools .gl{font:800 10.5px var(--font);color:var(--dim);letter-spacing:.5px;margin-right:2px}
+  .gtools .vsep{width:1px;height:20px;background:var(--stroke);margin:0 4px}
   .gtools .grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .gtools .sp{flex:1}
   .tchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--stroke);background:#fff;padding:5px 10px;font:700 11.5px var(--font);color:var(--muted);cursor:pointer}
@@ -271,6 +273,7 @@
   .sec::after{content:"";flex:1;height:1px;background:var(--stroke-soft)}
   /* レイヤー別一覧 */
   .lgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+  .lhead small{display:block;font-size:9.5px;color:var(--dim);font-weight:700;letter-spacing:.5px}
   .lcol{border:1px solid var(--stroke-soft);border-top:3px solid var(--c);background:#fff;min-width:0}
   .lhead{padding:8px 10px;display:flex;align-items:baseline;gap:6px;border-bottom:1px solid var(--stroke-soft)}
   .lhead b{font-size:13px;font-weight:900;color:var(--c)}
@@ -349,7 +352,7 @@
 <!-- ================= App bar ================= -->
 <header class="appbar">
   <div class="appbar-in">
-    <div class="brand">DROP<i>.</i> Graph<small>ENVIRONMENTAL ASSETS × EMOTION</small></div>
+    <div class="brand">DROP<i>.</i> Graph<small>ASSETS · EXPERIENCE · EMOTION</small></div>
     <nav class="stepper" aria-label="ステップ">
       <button type="button" class="step-tab active" id="tab1"><b>01</b><span class="lt">投稿を選ぶ</span></button>
       <span class="step-line"></span>
@@ -540,23 +543,34 @@ const CONFIG = {
   PRESETS: ["空間は建物の部分（階段・屋上など）まで分ける", "感情は 8 個以内にまとめる", "[推定] のタグは控えめにする", "写真から読み取れる行為を重視する"],
   KEYS: { TOKEN: "dropGraphToken", PW: "dropGraphPw", PREFS: "dropGraphPrefs", SEL: "dropGraphSelected" }
 };
-/** ノード種別の定義
- *  環境資産の 4 レイヤー（asset:true）＝ 自然文化 → 空間 → 機能 → 活動（時間軸の長い順。濃い青 → 淡い青）
- *  体験・感情はレイヤーに属さない周縁の要素（体験＝緑系、感情＝オレンジ系）
- *  GAS / プロンプトの layer 値と合わせる */
-const LAYERS = {
-  nature:     { label: "自然文化", time: "百年",         hex: "#1d3f8f", asset: true, desc: "その場所である理由（地形・気候・植生・歴史・伝統文化・食文化）" },
-  space:      { label: "空間",     time: "数十年",       hex: "#2f66c6", asset: true, desc: "機能が置かれている物理的な場（建物・公園・広場・街路・まちなみ）" },
-  function:   { label: "機能",     time: "数年",         hex: "#5c95e0", asset: true, desc: "活動の機会を提供するもの（店舗・設備・用途・仮設の設え）" },
-  activity:   { label: "活動",     time: "数日〜数か月", hex: "#9cc4f2", asset: true, desc: "そのとき投稿者がしたこと（イベント・行為）" },
-  experience: { label: "体験",     time: "",             hex: "#3a9a5b", asset: false, desc: "環境資産を通じて投稿者が受け取ったもの（眺め・味・音・光・空気感など）" },
-  emotion:    { label: "感情",     time: "",             hex: "#e07b2e", asset: false, desc: "投稿者自身の感情・気分" }
+/** ノードの種別（描画用）
+ *  ノードは 3 カテゴリー：環境資産（asset）・体験（experience）・感情（emotion）
+ *  レイヤーは環境資産だけの分類（自然文化 → 空間 → 機能 → 活動：時間軸の長い順。濃い青 → 淡い青）
+ *  体験・感情はレイヤーに属さない。kind は「環境資産ならレイヤー、それ以外はカテゴリー」 */
+const KINDS = {
+  nature:     { label: "自然文化", cat: "asset",      time: "百年",         hex: "#1d3f8f", desc: "その場所である理由（地形・気候・植生・歴史・伝統文化・食文化）" },
+  space:      { label: "空間",     cat: "asset",      time: "数十年",       hex: "#2f66c6", desc: "物理的な場（建物・公園・広場・街路・まちなみ）" },
+  function:   { label: "機能",     cat: "asset",      time: "数年",         hex: "#5c95e0", desc: "数年単位で続く用途・店舗・設備・サービス" },
+  activity:   { label: "活動",     cat: "asset",      time: "数日〜数か月", hex: "#9cc4f2", desc: "イベント等の一過性のコンテンツ" },
+  experience: { label: "体験",     cat: "experience", time: "",             hex: "#3a9a5b", desc: "投稿者の行動（動詞を含む行動全般）" },
+  emotion:    { label: "感情",     cat: "emotion",    time: "",             hex: "#e07b2e", desc: "投稿者自身の感情・気分" }
 };
-const LAYER_KEYS = Object.keys(LAYERS);
-const ASSET_KEYS = LAYER_KEYS.filter(l => LAYERS[l].asset);
-const kindLabel = l => (LAYERS[l].asset ? "環境資産：" + LAYERS[l].label : LAYERS[l].label);
-const shapeCls = l => (l === "emotion" ? "dia " : l === "experience" ? "sq " : "");
-const LINK_ASSET = "#8b9bb4";   // 環境資産どうしをつなぐ線の色（体験・感情への線はそれぞれの色）
+const KIND_KEYS = Object.keys(KINDS);
+const ASSET_KEYS = KIND_KEYS.filter(k => KINDS[k].cat === "asset");
+const isAssetKind = k => KINDS[k].cat === "asset";
+const kindLabel = k => (isAssetKind(k) ? "環境資産：" + KINDS[k].label : KINDS[k].label);
+const shapeCls = k => (k === "emotion" ? "dia " : k === "experience" ? "sq " : "");
+/** GAS の結果に描画用の kind を付ける（旧形式：layer に experience / emotion が入っている場合にも対応） */
+function prepareResult(r) {
+  r.nodes = (r.nodes || []).map(n => {
+    const kind = n.kind && KINDS[n.kind] ? n.kind
+      : n.category && n.category !== "asset" ? n.category
+      : n.layer;
+    return { ...n, kind };
+  }).filter(n => KINDS[n.kind]);
+  return r;
+}
+const LINK_ASSET = "#8b9bb4";   // 環境資産どうしの線の色（体験・感情への線はそれぞれの色）
 
 /* ---------- 共通 ---------- */
 const $ = id => document.getElementById(id);
@@ -576,7 +590,7 @@ const ICON = {
 
 /* ---------- 状態 ---------- */
 let POSTS = [];
-const defaultView = () => ({ types: new Set(LAYER_KEYS), minW: 1, inferred: true });
+const defaultView = () => ({ types: new Set(KIND_KEYS), minW: 1, inferred: true });
 const S = {
   f: { q: "", genders: new Set(), ages: new Set(), dates: new Set(), sort: "new" },
   selected: new Set(), step: 1,
@@ -1017,7 +1031,7 @@ async function run(force) {
   }
   S.retried = false;
   S.lastKey = pl.key;
-  S.run = { result: res.result, idMap: pl.idMap, model: res.model, generated_at: res.generated_at, prompt_version: res.prompt_version, images_used: res.images_used, instructions: pl.instructions };
+  S.run = { result: prepareResult(res.result), idMap: pl.idMap, model: res.model, generated_at: res.generated_at, prompt_version: res.prompt_version, images_used: res.images_used, instructions: pl.instructions };
   S.focus = null; S.hover = null; S.view = defaultView();
   const at = res.generated_at ? new Date(res.generated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   $("resultMeta").textContent = `${at} 生成 ・ ${res.model || ""} ・ ${sec} 秒${res.cached ? "（キャッシュ）" : ""}${res.images_used ? ` ・ 画像 ${res.images_used} 枚` : ""}`;
@@ -1056,16 +1070,16 @@ function checkStale() {
    結果表示
 ===================================================================== */
 const nodeById = id => S.run.result.nodes.find(n => n.id === id);
-const dot = (l, cls = "") => `<i class="${shapeCls(l)}${cls}" style="--c:${LAYERS[l].hex}"></i>`;
+const dot = (l, cls = "") => `<i class="${shapeCls(l)}${cls}" style="--c:${KINDS[l].hex}"></i>`;
 
 function renderResult() {
   const r = S.run.result;
-  const cnt = l => r.nodes.filter(n => n.layer === l).length;
-  const chip = l => `<button type="button" class="tchip${S.view.types.has(l) ? " on" : ""}" data-type="${l}" style="--c:${LAYERS[l].hex}" title="${esc(LAYERS[l].desc)}">${dot(l)}${LAYERS[l].label}<em>${cnt(l)}</em></button>`;
+  const cnt = l => r.nodes.filter(n => n.kind === l).length;
+  const chip = l => `<button type="button" class="tchip${S.view.types.has(l) ? " on" : ""}" data-type="${l}" style="--c:${KINDS[l].hex}" title="${esc(KINDS[l].desc)}">${dot(l)}${KINDS[l].label}<em>${cnt(l)}</em></button>`;
   $("result").innerHTML = `
     ${r.summary ? `<div class="headline">${esc(r.summary)}</div>` : ""}
     <div class="gtools">
-      <div class="grp">${LAYER_KEYS.map(chip).join("")}</div>
+      <div class="grp"><span class="gl">環境資産</span>${ASSET_KEYS.map(chip).join("")}<span class="vsep"></span>${chip("experience")}${chip("emotion")}</div>
       <span class="sp"></span>
       <div class="grp">強さ<div class="wseg" id="minW">${[1, 2, 3, 4, 5].map(w => `<button type="button" data-w="${w}" class="${w === S.view.minW ? "on" : ""}">${w === 1 ? "すべて" : w + "+"}</button>`).join("")}</div></div>
     </div>
@@ -1110,11 +1124,11 @@ function renderResult() {
 /** レイヤー別のタグ一覧（スコア合計の高い順） */
 function renderLayerGrid() {
   const r = S.run.result;
-  $("lgrid").innerHTML = LAYER_KEYS.map(l => {
-    const L = LAYERS[l];
-    const list = r.nodes.filter(n => n.layer === l).sort((a, b) => b.score_sum - a.score_sum || b.post_ids.length - a.post_ids.length);
+  $("lgrid").innerHTML = KIND_KEYS.map(l => {
+    const L = KINDS[l];
+    const list = r.nodes.filter(n => n.kind === l).sort((a, b) => b.score_sum - a.score_sum || b.post_ids.length - a.post_ids.length);
     return `<div class="lcol" style="--c:${L.hex}">
-      <div class="lhead"><b>${L.label}</b><em>${list.length}</em></div>
+      <div class="lhead"><b>${L.cat === "asset" ? "<small>環境資産</small>" : ""}${L.label}</b><em>${list.length}</em></div>
       <div class="litems">${list.length ? list.map(n => `<button type="button" class="litem" data-node="${esc(n.id)}" title="${esc(n.description || n.label)}">
         <span class="ll">${esc(n.label)}</span><span class="ls">${n.score_sum}</span></button>`).join("") : '<div class="lnone">該当なし</div>'}</div>
     </div>`;
@@ -1125,7 +1139,7 @@ function focusNode(id, scroll) {
   const n = nodeById(id); if (!n) return;
   // 非表示レイヤー・推定非表示のノードを選んだら表示を戻す
   let redraw = false;
-  if (!S.view.types.has(n.layer)) { S.view.types.add(n.layer); redraw = true; }
+  if (!S.view.types.has(n.kind)) { S.view.types.add(n.kind); redraw = true; }
   if (n.inferred && !S.view.inferred) { S.view.inferred = true; redraw = true; }
   S.focus = { kind: "node", id };
   if (redraw) { renderResult(); S.focus = { kind: "node", id }; applyFocus(); renderDetail(); }
@@ -1144,10 +1158,10 @@ const edgeKey = l => srcId(l) + ">" + tgtId(l);
 
 function visibleGraph() {
   const r = S.run.result, on = S.view.types;
-  const ok = new Map(r.nodes.filter(n => on.has(n.layer) && (S.view.inferred || !n.inferred)).map(n => [n.id, n]));
+  const ok = new Map(r.nodes.filter(n => on.has(n.kind) && (S.view.inferred || !n.inferred)).map(n => [n.id, n]));
   const links = r.edges.filter(e => e.weight >= S.view.minW && ok.has(e.source) && ok.has(e.target));
   const linked = new Set(links.flatMap(e => [e.source, e.target]));
-  const nodes = [...ok.values()].filter(n => LAYERS[n.layer].asset || linked.has(n.id));
+  const nodes = [...ok.values()].filter(n => isAssetKind(n.kind) || linked.has(n.id));
   return { nodes, links };
 }
 
@@ -1159,27 +1173,27 @@ function drawGraph(relayout) {
   const W = box.clientWidth || 900, H = box.clientHeight || 640;
   const { nodes: vn, links: vl } = visibleGraph();
   box.innerHTML = "";
-  if (!vn.length) { box.innerHTML = '<div class="gempty"><div><b>表示できるノードがありません</b>表示するレイヤーや条件を見直してください</div></div>'; G.linkSel = null; renderDetail(); return; }
+  if (!vn.length) { box.innerHTML = '<div class="gempty"><div><b>表示できるノードがありません</b>表示する種別や強さを見直してください</div></div>'; G.linkSel = null; renderDetail(); return; }
 
   // ゆるやかな同心配置：環境資産は中央（左→右に 自然文化→活動）、体験はその外側、感情はさらに外側に寄せる
   const cols = ASSET_KEYS.filter(l => S.view.types.has(l));
-  const nAsset = vn.filter(n => LAYERS[n.layer].asset).length;
-  const R0 = Math.max(120, Math.sqrt(nAsset || 1) * 48);
-  const ringR = l => (l === "experience" ? R0 * 1.55 : l === "emotion" ? R0 * 2.15 : 0);
+  const nAsset = vn.filter(n => isAssetKind(n.kind)).length;
+  const R0 = Math.max(130, Math.sqrt(nAsset || 1) * 50);
+  const ringR = k => (k === "experience" ? R0 * 1.7 : k === "emotion" ? R0 * 2.4 : 0);
   const colW = cols.length ? (1.7 * R0) / cols.length : 0;
-  const nodeX = l => (cols.indexOf(l) - (cols.length - 1) / 2) * colW;
-  const isAsset = d => LAYERS[d.layer].asset;
+  const nodeX = k => (cols.indexOf(k) - (cols.length - 1) / 2) * colW;
+  const isAsset = d => isAssetKind(d.kind);
 
   const nodes = vn.map(n => {
     const p = prev.get(n.id);
     if (p) return { ...n, x: p.x, y: p.y };
-    if (LAYERS[n.layer].asset) return { ...n, x: nodeX(n.layer) + (Math.random() - .5) * 20, y: (Math.random() - .5) * R0 };
+    if (isAssetKind(n.kind)) return { ...n, x: nodeX(n.kind) + (Math.random() - .5) * 20, y: (Math.random() - .5) * R0 };
     return { ...n, x: 0, y: 0, _ring: true };
   });
-  // 体験・感情の初期位置は、つながる要素の方向に置く
+  // 体験・感情の初期位置は、つながる要素の方向に置く（体験 → 感情の順）
   const pos0 = new Map(nodes.map(n => [n.id, n]));
-  ["experience", "emotion"].forEach(l => {
-    const list = nodes.filter(n => n.layer === l && n._ring);
+  ["experience", "emotion"].forEach(k => {
+    const list = nodes.filter(n => n.kind === k && n._ring);
     list.forEach((n, i) => {
       let sx = 0, sy = 0;
       vl.forEach(e => {
@@ -1187,7 +1201,7 @@ function drawGraph(relayout) {
         if (o && !o._ring && (o.x || o.y)) { sx += o.x * e.weight; sy += o.y * e.weight; }
       });
       const a = (sx || sy) ? Math.atan2(sy, sx) + (Math.random() - .5) * 0.4 : (i / Math.max(1, list.length)) * 2 * Math.PI;
-      n.x = Math.cos(a) * ringR(l); n.y = Math.sin(a) * ringR(l); n._ring = false;
+      n.x = Math.cos(a) * ringR(k); n.y = Math.sin(a) * ringR(k); n._ring = false;
     });
   });
   const links = vl.map(e => ({ ...e }));
@@ -1197,12 +1211,13 @@ function drawGraph(relayout) {
   const root = svg.append("g");
   G.zoom = d3.zoom().scaleExtent([0.2, 4]).on("zoom", e => root.attr("transform", e.transform));
   svg.call(G.zoom).on("dblclick.zoom", null);
-  svg.on("click", e => { if (e.target === svg.node() || false) { S.focus = null; applyFocus(); renderDetail(); } });
+  svg.on("click", e => { if (e.target === svg.node()) { S.focus = null; applyFocus(); renderDetail(); } });
 
   const gLink = root.append("g"), gHit = root.append("g"), gNode = root.append("g");
+  const linkColor = d => { const t = (nodeById(tgtId(d)) || {}).kind; return t === "emotion" ? KINDS.emotion.hex : t === "experience" ? KINDS.experience.hex : LINK_ASSET; };
   const linkSel = gLink.selectAll("line").data(links).join("line")
     .attr("class", "lk-line")
-    .attr("stroke", d => { const t = (nodeById(d.target) || {}).layer; return t === "emotion" ? LAYERS.emotion.hex : t === "experience" ? LAYERS.experience.hex : LINK_ASSET; })
+    .attr("stroke", linkColor)
     .attr("stroke-width", d => strokeW(d.weight))
     .attr("stroke-opacity", d => strokeO(d.weight));
   const hitSel = gHit.selectAll("line").data(links).join("line")
@@ -1213,7 +1228,7 @@ function drawGraph(relayout) {
   hitSel.append("title").text(d => `${(nodeById(srcId(d)) || {}).label} — ${(nodeById(tgtId(d)) || {}).label}（強さ ${d.weight}）`);
 
   const nodeSel = gNode.selectAll("g").data(nodes, d => d.id).join("g")
-    .attr("class", d => "nd " + d.layer)
+    .attr("class", d => "nd " + d.kind)
     .on("mouseenter", (e, d) => hover({ kind: "node", id: d.id }))
     .on("mouseleave", () => hover(null))
     .on("click", (e, d) => { e.stopPropagation(); S.focus = { kind: "node", id: d.id }; applyFocus(); renderDetail(); })
@@ -1221,31 +1236,26 @@ function drawGraph(relayout) {
       .on("start", (e, d) => { if (!e.active) G.sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
       .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
       .on("end", (e, d) => { if (!e.active) G.sim.alphaTarget(0); d.fx = null; d.fy = null; }));
-  // 形：環境資産＝円、体験＝角丸の四角、感情＝ひし形（推定タグも通常と同じ表示）
-  const shapeAttrs = sel => sel
-    .attr("class", "shape")
-    .attr("fill", d => LAYERS[d.layer].hex)
-    .attr("stroke", "#fff")
-    .attr("stroke-width", 2.5);
-  shapeAttrs(nodeSel.filter(d => LAYERS[d.layer].asset).append("circle").attr("r", radius));
-  shapeAttrs(nodeSel.filter(d => d.layer === "experience").append("rect").attr("rx", 3)
+  // 形：環境資産＝円、体験＝角丸の四角、感情＝ひし形
+  const shapeAttrs = sel => sel.attr("class", "shape").attr("fill", d => KINDS[d.kind].hex).attr("stroke", "#fff").attr("stroke-width", 2.5);
+  shapeAttrs(nodeSel.filter(d => isAsset(d)).append("circle").attr("r", radius));
+  shapeAttrs(nodeSel.filter(d => d.kind === "experience").append("rect").attr("rx", 3)
     .attr("x", d => -radius(d) * 0.9).attr("y", d => -radius(d) * 0.9).attr("width", d => radius(d) * 1.8).attr("height", d => radius(d) * 1.8));
-  shapeAttrs(nodeSel.filter(d => d.layer === "emotion").append("path").attr("d", d => { const r = radius(d) * 1.2; return `M0,${-r}L${r},0L0,${r}L${-r},0Z`; }));
+  shapeAttrs(nodeSel.filter(d => d.kind === "emotion").append("path").attr("d", d => { const r = radius(d) * 1.2; return `M0,${-r}L${r},0L0,${r}L${-r},0Z`; }));
   nodeSel.filter(d => d.post_ids.length > 1).append("text").attr("class", "ncnt").attr("text-anchor", "middle").attr("dy", "0.35em")
-    .attr("fill", d => d.layer === "activity" ? "#1d3f8f" : "#fff").text(d => d.post_ids.length);
-  const lbl = nodeSel.append("text").attr("x", d => radius(d) * (d.layer === "emotion" ? 1.2 : 1) + 6).attr("dy", "0.35em");
-  lbl.append("tspan").text(d => clip(d.label, 14));
-  nodeSel.append("title").text(d => `${kindLabel(d.layer)}：${d.label}\n${d.description || ""}\n投稿 ${d.post_ids.length} 件 ・ スコア合計 ${d.score_sum}`);
+    .attr("fill", d => d.kind === "activity" ? "#1d3f8f" : "#fff").text(d => d.post_ids.length);
+  nodeSel.append("text").attr("x", d => radius(d) * (d.kind === "emotion" ? 1.2 : 1) + 6).attr("dy", "0.35em").text(d => clip(d.label, 14));
+  nodeSel.append("title").text(d => `${kindLabel(d.kind)}：${d.label}\n${d.description || ""}\n投稿 ${d.post_ids.length} 件 ・ スコア合計 ${d.score_sum}`);
 
   G.sim = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id(d => d.id).distance(90).strength(l => 0.03 + l.weight * 0.02))
     .force("charge", d3.forceManyBody().strength(-160).distanceMax(320))
     .force("collide", d3.forceCollide(d => radius(d) + 14).iterations(2))
-    .force("x", d3.forceX(d => isAsset(d) ? nodeX(d.layer) : 0).strength(d => isAsset(d) ? 0.12 : 0))
+    .force("x", d3.forceX(d => isAsset(d) ? nodeX(d.kind) : 0).strength(d => isAsset(d) ? 0.12 : 0))
     .force("y", d3.forceY(0).strength(d => isAsset(d) ? 0.08 : 0))
-    .force("ring", d3.forceRadial(d => ringR(d.layer), 0, 0).strength(d => isAsset(d) ? 0 : 0.18))
+    .force("ring", d3.forceRadial(d => ringR(d.kind), 0, 0).strength(d => isAsset(d) ? 0 : 0.18))
     .stop();
-  if (!prev.size) for (let i = 0; i < 260; i++) G.sim.tick();      // 先に配置を落ち着かせてから表示（全体表示を正確にする）
+  if (!prev.size) for (let i = 0; i < 260; i++) G.sim.tick();      // 配置を先に落ち着かせてから表示
   const render = () => {
     linkSel.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
     hitSel.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
@@ -1256,7 +1266,7 @@ function drawGraph(relayout) {
   G.pos = new Map();
   G.sim.on("end", () => nodes.forEach(n => G.pos.set(n.id, { x: n.x, y: n.y })));
 
-  // ノード（ラベル込み）全体が画面いっぱいに収まるように表示
+  // ノード（ラベル込み）全体が枠いっぱいに収まるように表示
   G.fit = animate => {
     const xs = nodes.map(d => d.x), ys = nodes.map(d => d.y);
     const x0 = Math.min(...xs) - 40, x1 = Math.max(...xs) + 130, y0 = Math.min(...ys) - 40, y1 = Math.max(...ys) + 40;
@@ -1313,19 +1323,21 @@ function renderDetail() {
   const el = $("detail"); if (!el || !S.run) return;
   const f = S.focus;
   if (!f) {
-    el.innerHTML = `<div class="ph0txt">ノードや線をクリックすると詳細を表示します。</div>`; return; }
+    el.innerHTML = `<div class="ph0txt">ノードや線をクリックすると詳細を表示します。</div>`;
+    return;
+  }
   if (f.kind === "node") {
     const n = nodeById(f.id); if (!n) { S.focus = null; return renderDetail(); }
-    const L = LAYERS[n.layer];
+    const L = KINDS[n.kind];
     const rel = S.run.result.edges.filter(e => e.source === n.id || e.target === n.id)
       .map(e => ({ e, o: nodeById(e.source === n.id ? e.target : e.source) })).filter(x => x.o)
       .sort((a, b) => b.e.weight - a.e.weight || b.e.post_ids.length - a.e.post_ids.length);
-    const groups = LAYER_KEYS.filter(l => l !== n.layer).map(l => ({ l, arr: rel.filter(x => x.o.layer === l) })).filter(g => g.arr.length);
-    const nb = groups.length ? `<div class="nb">${groups.map(g => `<div class="nb-g" style="--c:${LAYERS[g.l].hex}">${LAYERS[g.l].label}</div>` +
-      g.arr.map(x => `<button type="button" data-node="${esc(x.o.id)}" style="--c:${LAYERS[x.o.layer].hex}">${dot(x.o.layer)}<span>${esc(x.o.label)}</span>${meter(x.e.weight)}</button>`).join("")).join("")}</div>`
+    const groups = KIND_KEYS.filter(l => l !== n.kind).map(l => ({ l, arr: rel.filter(x => x.o.kind === l) })).filter(g => g.arr.length);
+    const nb = groups.length ? `<div class="nb">${groups.map(g => `<div class="nb-g" style="--c:${KINDS[g.l].hex}">${KINDS[g.l].label}</div>` +
+      g.arr.map(x => `<button type="button" data-node="${esc(x.o.id)}" style="--c:${KINDS[x.o.kind].hex}">${dot(x.o.kind)}<span>${esc(x.o.label)}</span>${meter(x.e.weight)}</button>`).join("")).join("")}</div>`
       : '<div class="ph0txt">つながる要素はありません</div>';
     el.innerHTML = `
-      <div class="d-head"><span class="tbadge" style="--c:${L.hex}">${kindLabel(n.layer)}</span>${L.time ? `<span class="tax">時間軸：${L.time}</span>` : ""}
+      <div class="d-head"><span class="tbadge" style="--c:${L.hex}">${kindLabel(n.kind)}</span>${L.time ? `<span class="tax">時間軸：${L.time}</span>` : ""}
         <span class="d-title">${esc(n.label)}</span>
         <span style="margin-left:auto;font-size:11.5px;color:var(--muted)">スコア合計 <b style="color:var(--text)">${n.score_sum}</b> ・ 最高 ${n.score_max} 点</span></div>
       ${n.description ? `<p class="d-desc">${esc(n.description)}</p>` : ""}
@@ -1337,7 +1349,7 @@ function renderDetail() {
     const e = S.run.result.edges.find(x => x.source + ">" + x.target === f.id);
     if (!e) { S.focus = null; return renderDetail(); }
     const a = nodeById(e.source), b = nodeById(e.target);
-    const nm = n => `<button type="button" class="link-btn" data-node="${esc(n.id)}" style="font-size:15px;font-weight:900;color:${LAYERS[n.layer].hex};text-decoration:none">${esc(n.label)}</button><span class="tax">${LAYERS[n.layer].label}</span>`;
+    const nm = n => `<button type="button" class="link-btn" data-node="${esc(n.id)}" style="font-size:15px;font-weight:900;color:${KINDS[n.kind].hex};text-decoration:none">${esc(n.label)}</button><span class="tax">${KINDS[n.kind].label}</span>`;
     el.innerHTML = `
       <div class="d-head"><span class="tbadge" style="--c:var(--text)">つながり</span>${nm(a)}<span style="color:var(--dim)">—</span>${nm(b)}
         <span style="margin-left:auto">強さ ${meter(e.weight)}</span></div>
@@ -1353,7 +1365,8 @@ function downloadJson() {
   const r = S.run;
   const out = {
     generated_at: r.generated_at, model: r.model, prompt_version: r.prompt_version, instructions: r.instructions,
-    layers: Object.fromEntries(LAYER_KEYS.map(l => [l, { label: LAYERS[l].label, time: LAYERS[l].time }])),
+    categories: { asset: "環境資産", experience: "体験", emotion: "感情" },
+    layers: Object.fromEntries(ASSET_KEYS.map(l => [l, { label: KINDS[l].label, time: KINDS[l].time }])),
     posts: Object.entries(r.idMap).map(([pid, aid]) => { const p = byId(aid) || {}; return { post_id: pid, artwork_id: aid, account_name: p.n, post_dated_at: p.t, sentence: p.s, image: p.img }; }),
     ...r.result
   };
