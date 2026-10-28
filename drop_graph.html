@@ -1190,6 +1190,8 @@ function drawGraph(relayout) {
       n.x = Math.cos(a) * ringR(l); n.y = Math.sin(a) * ringR(l); n._ring = false;
     });
   });
+  const links = vl.map(e => ({ ...e }));
+
   const svg = d3.select(box).append("svg").attr("viewBox", [-W / 2, -H / 2, W, H]);
   G.svg = svg;
   const root = svg.append("g");
